@@ -119,12 +119,11 @@ function mostrarAvisoSalvamento() {
 
 function criarDadosDemonstracao() {
   const categorias = [
-    { id: 'cat_trabalho', name: 'Trabalho', color: '#2F5D58' },
-    { id: 'cat_cartao', name: 'Cartão de Todos', color: '#1B3A4B' },
-    { id: 'cat_falabem', name: 'FalaBem', color: '#4E8F7C' },
-    { id: 'cat_rank', name: 'Hora do Rank', color: '#D9A441' },
+    { id: 'cat_trabalho', name: 'Trabalho', color: '#1F5C54' },
     { id: 'cat_casa', name: 'Casa', color: '#E8836B' },
     { id: 'cat_saude', name: 'Saúde', color: '#8E6BA8' },
+    { id: 'cat_estudos', name: 'Estudos', color: '#1B3A4B' },
+    { id: 'cat_lazer', name: 'Lazer', color: '#D9A441' },
     { id: 'cat_pessoal', name: 'Pessoal', color: '#5B8FBF' }
   ];
 
@@ -140,7 +139,7 @@ function criarDadosDemonstracao() {
     },
     {
       id: gerarId('act'), title: 'Atualizar o ranking', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_rank', priority: 'media',
+      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
       type: 'tarefa', reminderMinutes: null, reminderCustom: '',
       subtasks: [
         { id: gerarId('sub'), text: 'Conferir vendas', done: false },
@@ -153,13 +152,13 @@ function criarDadosDemonstracao() {
     },
     {
       id: gerarId('act'), title: 'Conferir as vendas', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_cartao', priority: 'media',
+      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
       type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
       focusModeAllowed: true, completed: false, order: 2, createdAt: Date.now()
     },
     {
       id: gerarId('act'), title: 'Responder clientes', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_cartao', priority: 'baixa',
+      time: '', endTime: '', category: 'cat_trabalho', priority: 'baixa',
       type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
       focusModeAllowed: true, completed: false, order: 3, createdAt: Date.now()
     },
@@ -177,7 +176,7 @@ function criarDadosDemonstracao() {
     },
     {
       id: gerarId('act'), title: 'Passar as metas', description: '', date: amanha,
-      time: '', endTime: '', category: 'cat_rank', priority: 'media',
+      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
       type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
       focusModeAllowed: true, completed: false, order: 1, createdAt: Date.now()
     },
@@ -1252,6 +1251,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     document.getElementById('act-category').value = rotinaOriginal.category || '';
     document.getElementById('act-time').value = rotinaOriginal.time || '';
     document.getElementById('act-end-time').value = rotinaOriginal.endTime || '';
+    document.getElementById('act-has-time').checked = !!rotinaOriginal.time;
     document.getElementById('act-notes').value = rotinaOriginal.notes || '';
     document.getElementById('act-focus-mode').checked = !!rotinaOriginal.focusModeAllowed;
     document.getElementById('act-recurrence').value = rotinaOriginal.recurrence || 'daily';
@@ -1272,6 +1272,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
       document.getElementById('act-category').value = original.category || '';
       document.getElementById('act-time').value = original.time || '';
       document.getElementById('act-end-time').value = original.endTime || '';
+      document.getElementById('act-has-time').checked = !!original.time;
       document.getElementById('act-notes').value = original.notes || '';
       document.getElementById('act-focus-mode').checked = !!original.focusModeAllowed;
       subtarefasEmEdicao = (original.subtasks || []).map((s) => ({ id: s.id, text: s.text }));
@@ -1280,6 +1281,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
   } else {
     // Nova atividade
     document.getElementById('act-date').value = dataPredefinida || hojeStr();
+    document.getElementById('act-has-time').checked = false;
     configurarReminderUI(null, '');
   }
 
@@ -1318,8 +1320,13 @@ function configurarReminderUI(minutos, custom) {
 }
 
 function atualizarVisibilidadeCamposConforme() {
-  const temHorario = !!document.getElementById('act-time').value;
+  const temHorario = document.getElementById('act-has-time').checked;
+  document.getElementById('act-time-row').classList.toggle('hidden', !temHorario);
   document.getElementById('act-reminder-block').classList.toggle('hidden', !temHorario);
+  if (!temHorario) {
+    document.getElementById('act-time').value = '';
+    document.getElementById('act-end-time').value = '';
+  }
 
   const recorrencia = document.getElementById('act-recurrence').value;
   document.getElementById('recurrence-days').classList.toggle('hidden', recorrencia !== 'custom-days');
@@ -1348,7 +1355,7 @@ function renderizarSubtarefasEdicao() {
 }
 
 function configurarFormAtividade() {
-  document.getElementById('act-time').addEventListener('change', atualizarVisibilidadeCamposConforme);
+  document.getElementById('act-has-time').addEventListener('change', atualizarVisibilidadeCamposConforme);
   document.getElementById('act-recurrence').addEventListener('change', atualizarVisibilidadeCamposConforme);
 
   document.querySelectorAll('#recurrence-days .chip').forEach((chip) => {
