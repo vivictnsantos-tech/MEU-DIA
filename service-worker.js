@@ -4,7 +4,7 @@
    e por exibir notificações locais quando o navegador permitir.
    ============================================================ */
 
-const CACHE_NAME = 'meu-dia-cache-v3';
+const CACHE_NAME = 'meu-dia-cache-v4';
 const APP_SHELL = [
   './',
   './index.html',
@@ -44,37 +44,3 @@ self.addEventListener('fetch', (event) => {
     caches.match(event.request).then((cached) => {
       const network = fetch(event.request)
         .then((response) => {
-          if (response && response.status === 200) {
-            const copy = response.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
-  );
-});
-
-// Permite que a página peça ao service worker para exibir uma notificação,
-// o que funciona mesmo com o navegador em segundo plano (mas não com o app
-// totalmente fechado — essa é uma limitação explicada dentro do app).
-self.addEventListener('message', (event) => {
-  const data = event.data || {};
-  if (data.type === 'SHOW_NOTIFICATION') {
-    const { title, options } = data;
-    self.registration.showNotification(title, options);
-  }
-});
-
-// Clique na notificação: foca ou abre a janela do app
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window' }).then((clientsArr) => {
-      const existing = clientsArr.find((c) => 'focus' in c);
-      if (existing) return existing.focus();
-      return self.clients.openWindow('./index.html');
-    })
-  );
-});
