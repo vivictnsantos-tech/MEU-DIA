@@ -561,6 +561,22 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
 .reminder-toast-actions .btn-secondary { background: rgba(255,255,255,0.85); }
 
 /* ============================================================
+   BANNER DE INSTALAÇÃO — iPhone/Safari
+   ============================================================ */
+.ios-install-banner {
+  position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  max-width: 520px; margin: 0 auto; background: var(--marinho); color: var(--branco);
+  border-radius: var(--raio); padding: 14px 14px; box-shadow: 0 14px 32px rgba(0,0,0,0.3); z-index: 250;
+  display: flex; align-items: flex-start; gap: 10px;
+}
+.ios-install-icon { font-size: 22px; flex-shrink: 0; }
+.ios-install-text { flex: 1; font-size: 13px; line-height: 1.5; }
+.ios-install-text strong { display: block; margin-bottom: 3px; font-size: 14px; }
+.ios-install-text span { opacity: .9; }
+.ios-share-icon { display: inline-block; }
+#btn-close-ios-banner { background: rgba(255,255,255,0.15); border: none; color: var(--branco); width: 30px; height: 30px; flex-shrink: 0; }
+
+/* ============================================================
    RESPONSIVO — DESKTOP
    ============================================================ */
 @media (min-width: 720px) {

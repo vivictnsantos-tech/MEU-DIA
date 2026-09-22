@@ -2055,6 +2055,23 @@ function configurarOnboarding() {
    15. INICIALIZAÇÃO
    ================================================================ */
 
+// Detecta iPhone/Safari fora do modo instalado e mostra um aviso
+// para instalar como app (a Apple não permite prompt automático nativo).
+function verificarAvisoInstalacaoIOS() {
+  const ehIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  const jaInstalado = window.navigator.standalone === true;
+  const jaDispensado = localStorage.getItem('meudia_ios_banner_dispensado') === '1';
+
+  if (ehIOS && !jaInstalado && !jaDispensado) {
+    document.getElementById('ios-install-banner').classList.remove('hidden');
+  }
+
+  document.getElementById('btn-close-ios-banner').addEventListener('click', () => {
+    document.getElementById('ios-install-banner').classList.add('hidden');
+    localStorage.setItem('meudia_ios_banner_dispensado', '1');
+  });
+}
+
 function registrarServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -2116,6 +2133,7 @@ function inicializar() {
   verificarLembretes();
 
   registrarServiceWorker();
+  verificarAvisoInstalacaoIOS();
 }
 
 document.addEventListener('DOMContentLoaded', inicializar);

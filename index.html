@@ -631,6 +631,16 @@
 <!-- Mensagem de status para leitores de tela -->
 <div id="aria-live" class="sr-only" aria-live="polite"></div>
 
+<!-- Banner de instalação para iPhone (Safari não permite prompt automático nativo) -->
+<div id="ios-install-banner" class="ios-install-banner hidden">
+  <span class="ios-install-icon">📲</span>
+  <div class="ios-install-text">
+    <strong>Instale o Meu Dia no seu iPhone</strong>
+    <span>Toque em <strong>Compartilhar</strong> <span class="ios-share-icon">⬆️</span> e depois em <strong>"Adicionar à Tela de Início"</strong></span>
+  </div>
+  <button id="btn-close-ios-banner" class="icon-btn" aria-label="Fechar aviso de instalação">✕</button>
+</div>
+
 <script src="script.js"></script>
 </body>
 </html>
