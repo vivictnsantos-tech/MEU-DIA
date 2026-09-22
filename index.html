@@ -34,11 +34,10 @@
       <legend>Quais categorias fazem mais parte do seu dia a dia? <span class="optional">(opcional)</span></legend>
       <div class="chip-group" id="onboard-categories">
         <button type="button" class="chip" data-cat="Trabalho">Trabalho</button>
-        <button type="button" class="chip" data-cat="Cartão de Todos">Cartão de Todos</button>
-        <button type="button" class="chip" data-cat="FalaBem">FalaBem</button>
-        <button type="button" class="chip" data-cat="Hora do Rank">Hora do Rank</button>
         <button type="button" class="chip" data-cat="Casa">Casa</button>
         <button type="button" class="chip" data-cat="Saúde">Saúde</button>
+        <button type="button" class="chip" data-cat="Estudos">Estudos</button>
+        <button type="button" class="chip" data-cat="Lazer">Lazer</button>
         <button type="button" class="chip" data-cat="Pessoal">Pessoal</button>
       </div>
     </fieldset>
@@ -387,9 +386,14 @@
         </label>
       </div>
 
-      <div class="field-row">
+      <label class="field field-inline">
+        <input type="checkbox" id="act-has-time">
+        <span>Definir horário para esta atividade</span>
+      </label>
+
+      <div class="field-row hidden" id="act-time-row">
         <label class="field">
-          <span>Horário <span class="optional">(opcional)</span></span>
+          <span>Horário</span>
           <input type="time" id="act-time">
         </label>
         <label class="field">
