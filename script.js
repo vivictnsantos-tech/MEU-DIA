@@ -114,93 +114,23 @@ function mostrarAvisoSalvamento() {
 }
 
 /* ================================================================
-   3. DADOS DE DEMONSTRAÇÃO (somente na primeira abertura)
+   3. INICIALIZAÇÃO VAZIA (primeira abertura — sem dados de exemplo)
    ================================================================ */
 
-function criarDadosDemonstracao() {
-  const categorias = [
-    { id: 'cat_trabalho', name: 'Trabalho', color: '#1F5C54' },
-    { id: 'cat_casa', name: 'Casa', color: '#E8836B' },
-    { id: 'cat_saude', name: 'Saúde', color: '#8E6BA8' },
-    { id: 'cat_estudos', name: 'Estudos', color: '#1B3A4B' },
-    { id: 'cat_lazer', name: 'Lazer', color: '#D9A441' },
-    { id: 'cat_pessoal', name: 'Pessoal', color: '#5B8FBF' }
-  ];
+// Categorias sugeridas na tela de boas-vindas (cores usadas se a pessoa escolher alguma)
+const CATEGORIAS_SUGERIDAS = {
+  'Trabalho': '#1F5C54',
+  'Casa': '#E8836B',
+  'Saúde': '#8E6BA8',
+  'Estudos': '#1B3A4B',
+  'Lazer': '#D9A441',
+  'Pessoal': '#5B8FBF'
+};
 
-  const hoje = hojeStr();
-  const amanha = amanhaStr();
-
-  const atividades = [
-    {
-      id: gerarId('act'), title: 'Reunião com a equipe', description: '', date: hoje,
-      time: '09:00', endTime: '09:30', category: 'cat_trabalho', priority: 'alta',
-      type: 'reuniao', reminderMinutes: 10, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: false, completed: false, order: 0, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Atualizar o ranking', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '',
-      subtasks: [
-        { id: gerarId('sub'), text: 'Conferir vendas', done: false },
-        { id: gerarId('sub'), text: 'Organizar os nomes', done: false },
-        { id: gerarId('sub'), text: 'Calcular resultados', done: false },
-        { id: gerarId('sub'), text: 'Atualizar a arte', done: false },
-        { id: gerarId('sub'), text: 'Enviar para a equipe', done: false }
-      ],
-      notes: '', focusModeAllowed: true, completed: false, order: 1, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Conferir as vendas', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: true, completed: false, order: 2, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Responder clientes', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'baixa',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: true, completed: false, order: 3, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Preparar o alinhamento de amanhã', description: '', date: hoje,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'baixa',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: true, completed: false, order: 4, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Alinhamento com a equipe', description: '', date: amanha,
-      time: '08:30', endTime: '', category: 'cat_trabalho', priority: 'alta',
-      type: 'compromisso', reminderMinutes: 15, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: false, completed: false, order: 0, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Passar as metas', description: '', date: amanha,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'media',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: true, completed: false, order: 1, createdAt: Date.now()
-    },
-    {
-      id: gerarId('act'), title: 'Conferir as pendências da reunião', description: '', date: amanha,
-      time: '', endTime: '', category: 'cat_trabalho', priority: 'baixa',
-      type: 'tarefa', reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: true, completed: false, order: 2, createdAt: Date.now()
-    }
-  ];
-
-  const rotinas = [
-    {
-      id: gerarId('rot'), title: 'Beber água e alongar', description: '', time: '', endTime: '',
-      category: 'cat_saude', priority: 'baixa', type: 'rotina',
-      reminderMinutes: null, reminderCustom: '', subtasks: [], notes: '',
-      focusModeAllowed: false, recurrence: 'daily', days: [], interval: null,
-      startDate: hoje, endDate: '', active: true, paused: false, skipDates: [], createdAt: Date.now()
-    }
-  ];
-
-  salvar(CHAVES.categories, categorias);
-  salvar(CHAVES.activities, atividades);
-  salvar(CHAVES.routines, rotinas);
+function inicializarDadosVazios() {
+  salvar(CHAVES.categories, []);
+  salvar(CHAVES.activities, []);
+  salvar(CHAVES.routines, []);
   salvar(CHAVES.completions, {});
   salvar(CHAVES.fired, []);
   salvar(CHAVES.history, {});
@@ -1981,6 +1911,17 @@ function configurarOnboarding() {
     chip.addEventListener('click', () => chip.classList.toggle('selected'));
   });
 
+  document.getElementById('btn-goto-profile').addEventListener('click', () => {
+    document.getElementById('screen-welcome').classList.add('hidden');
+    document.getElementById('screen-welcome-profile').classList.remove('hidden');
+    document.getElementById('onboard-name').focus();
+  });
+
+  document.getElementById('btn-back-intro').addEventListener('click', () => {
+    document.getElementById('screen-welcome-profile').classList.add('hidden');
+    document.getElementById('screen-welcome').classList.remove('hidden');
+  });
+
   document.getElementById('btn-start').addEventListener('click', () => {
     const nome = document.getElementById('onboard-name').value.trim();
     const notificacoes = document.getElementById('onboard-notifications').checked;
@@ -1988,7 +1929,21 @@ function configurarOnboarding() {
     state.settings.onboarded = true;
     salvarSettings();
 
-    document.getElementById('screen-welcome').classList.add('hidden');
+    // Cria só as categorias que a pessoa selecionou (app começa zerado)
+    const chipsSelecionados = Array.from(document.querySelectorAll('#onboard-categories .chip.selected'));
+    chipsSelecionados.forEach((chip) => {
+      const nomeCategoria = chip.dataset.cat;
+      const jaExiste = state.categories.some((c) => c.name === nomeCategoria);
+      if (!jaExiste) {
+        state.categories.push({
+          id: gerarId('cat'), name: nomeCategoria,
+          color: CATEGORIAS_SUGERIDAS[nomeCategoria] || '#1F5C54'
+        });
+      }
+    });
+    salvarCategorias();
+
+    document.getElementById('screen-welcome-profile').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     irParaTela('screen-today');
 
@@ -2004,6 +1959,7 @@ function configurarOnboarding() {
     state.settings.onboarded = true;
     salvarSettings();
     document.getElementById('screen-welcome').classList.add('hidden');
+    document.getElementById('screen-welcome-profile').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     irParaTela('screen-today');
   });
@@ -2025,7 +1981,7 @@ function registrarServiceWorker() {
 
 function inicializar() {
   const primeiraVez = localStorage.getItem(CHAVES.activities) === null;
-  if (primeiraVez) criarDadosDemonstracao();
+  if (primeiraVez) inicializarDadosVazios();
 
   carregarEstado();
   aplicarTema();

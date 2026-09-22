@@ -124,6 +124,8 @@ ul { list-style: none; margin: 0; padding: 0; }
   color: var(--petroleo); font-weight: 700; font-size: 14px; cursor: pointer; padding: 4px;
 }
 .welcome-illustration { width: 100%; max-width: 220px; height: auto; display: block; margin: 8px auto 18px; }
+.welcome-card-intro { text-align: center; }
+.welcome-card-intro .welcome-text { text-align: center; }
 .welcome-icon { font-size: 42px; margin-bottom: 10px; }
 .welcome-card h1 { font-size: 27px; margin-bottom: 10px; color: var(--marinho); line-height: 1.25; }
 .welcome-text { color: var(--texto-muted); line-height: 1.55; margin-bottom: 24px; font-size: 15px; }
