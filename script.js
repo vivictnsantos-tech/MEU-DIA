@@ -661,6 +661,21 @@ function criarCartaoAtividade(item, onClickOverride) {
 
   li.appendChild(check);
   li.appendChild(body);
+
+  // Atividades com horário de início e término definidos ganham um botão
+  // "Iniciar" que leva direto para a tela do cronômetro, sem precisar escolher tempo.
+  if (!item.completed && item.time && item.endTime) {
+    const startBtn = document.createElement('button');
+    startBtn.className = 'ac-start-btn';
+    startBtn.innerHTML = '▶ Iniciar';
+    startBtn.setAttribute('aria-label', 'Iniciar cronômetro desta atividade');
+    startBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      abrirModoFoco(item, { iniciarDireto: true });
+    });
+    li.appendChild(startBtn);
+  }
+
   li.appendChild(more);
 
   li.addEventListener('click', () => {
@@ -1427,7 +1442,7 @@ function abrirMenuAcoesItem(item) {
     acoes.push({ label: 'Adiar lembrete 10 minutos', fn: () => adiarLembrete(item, 10) });
   }
   if (item.focusModeAllowed) {
-    acoes.push({ label: 'Focar nesta tarefa', fn: () => abrirModoFoco(item) });
+    acoes.push({ label: 'Ativar Modo Foco', fn: () => abrirModoFoco(item) });
   }
   if (!item.isRoutine) {
     acoes.push({ label: 'Transformar em rotina', fn: () => abrirEscolhaRecorrenciaRapida(item) });
@@ -1567,9 +1582,22 @@ function abrirResolucaoPendencia(item) {
    13. MODO FOCO
    ================================================================ */
 
-function abrirModoFoco(item) {
+// Calcula a duração em minutos entre horário de início e término, se ambos existirem
+function duracaoEmMinutos(horaInicio, horaFim) {
+  if (!horaInicio || !horaFim) return null;
+  const [h1, m1] = horaInicio.split(':').map(Number);
+  const [h2, m2] = horaFim.split(':').map(Number);
+  let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (diff <= 0) diff += 24 * 60; // atividade que passa da meia-noite
+  return diff;
+}
+
+function abrirModoFoco(item, opcoes) {
+  const iniciarDireto = !!(opcoes && opcoes.iniciarDireto);
+
   state.focusActivityRef = { id: item.id, isRoutine: item.isRoutine, routineId: item.routineId, date: item.date };
   document.getElementById('focus-title').textContent = item.title;
+  document.getElementById('focus-ring-label').textContent = 'Foco em';
 
   const ul = document.getElementById('focus-subtasks');
   ul.innerHTML = '';
@@ -1588,12 +1616,56 @@ function abrirModoFoco(item) {
   document.querySelectorAll('#focus-time-choices .chip').forEach((c) => c.classList.remove('selected'));
   pararTimerFoco();
 
+  // Remove o chip de duração de uma abertura anterior, se existir
+  const chipAntigo = document.getElementById('focus-chip-duracao');
+  if (chipAntigo) chipAntigo.remove();
+
+  // Se a atividade já tem horário de início e término, pré-seleciona esse tempo
+  const duracao = duracaoEmMinutos(item.time, item.endTime);
+  if (duracao) {
+    const chip = document.createElement('button');
+    chip.id = 'focus-chip-duracao';
+    chip.className = 'chip selected';
+    chip.type = 'button';
+    chip.dataset.minutes = String(duracao);
+    const h = Math.floor(duracao / 60), m = duracao % 60;
+    chip.textContent = `Duração da atividade (${h > 0 ? h + 'h ' : ''}${m}min)`;
+    chip.addEventListener('click', () => {
+      document.querySelectorAll('#focus-time-choices .chip').forEach((c) => c.classList.remove('selected'));
+      chip.classList.add('selected');
+      document.getElementById('focus-custom-minutes').classList.add('hidden');
+      state.focusTimer.total = duracao * 60;
+    });
+    document.getElementById('focus-time-choices').prepend(chip);
+    state.focusTimer.total = duracao * 60;
+  }
+
   document.getElementById('focus-mode').classList.remove('hidden');
+
+  // Veio do botão "Iniciar" do card: pula a tela de escolha e já começa a contagem
+  if (iniciarDireto && duracao) {
+    iniciarContagemFoco();
+  }
 }
 
 function pararTimerFoco() {
   if (state.focusTimer.intervalId) clearInterval(state.focusTimer.intervalId);
   state.focusTimer = { seconds: 0, total: 0, running: false, intervalId: null };
+}
+
+// Inicia a contagem regressiva do Modo Foco com o tempo já definido em state.focusTimer.total
+function iniciarContagemFoco() {
+  if (!state.focusTimer.total) { alert('Escolha por quanto tempo você quer focar.'); return; }
+  state.focusTimer.seconds = state.focusTimer.total;
+  state.focusTimer.running = true;
+  document.getElementById('focus-ring-wrap').classList.remove('hidden');
+  document.getElementById('focus-time-choices').classList.add('hidden');
+  document.getElementById('focus-custom-minutes').classList.add('hidden');
+  document.getElementById('focus-start').classList.add('hidden');
+  document.getElementById('focus-pause').classList.remove('hidden');
+  document.getElementById('focus-stop').classList.remove('hidden');
+  atualizarDisplayTimerFoco();
+  state.focusTimer.intervalId = setInterval(tickTimerFoco, 1000);
 }
 
 function configurarModoFoco() {
@@ -1617,19 +1689,7 @@ function configurarModoFoco() {
     state.focusTimer.total = (Number(ev.target.value) || 0) * 60;
   });
 
-  document.getElementById('focus-start').addEventListener('click', () => {
-    if (!state.focusTimer.total) { alert('Escolha por quanto tempo você quer focar.'); return; }
-    state.focusTimer.seconds = state.focusTimer.total;
-    state.focusTimer.running = true;
-    document.getElementById('focus-ring-wrap').classList.remove('hidden');
-    document.getElementById('focus-time-choices').classList.add('hidden');
-    document.getElementById('focus-custom-minutes').classList.add('hidden');
-    document.getElementById('focus-start').classList.add('hidden');
-    document.getElementById('focus-pause').classList.remove('hidden');
-    document.getElementById('focus-stop').classList.remove('hidden');
-    atualizarDisplayTimerFoco();
-    state.focusTimer.intervalId = setInterval(tickTimerFoco, 1000);
-  });
+  document.getElementById('focus-start').addEventListener('click', iniciarContagemFoco);
 
   document.getElementById('focus-pause').addEventListener('click', () => {
     if (state.focusTimer.running) {
@@ -1677,7 +1737,9 @@ function tickTimerFoco() {
   if (state.focusTimer.seconds <= 0) {
     clearInterval(state.focusTimer.intervalId);
     state.focusTimer.running = false;
-    tocarSom();
+    if (state.settings.sounds) tocarSomFimDoFoco();
+    if (navigator.vibrate) { try { navigator.vibrate([200, 100, 200]); } catch (e) { /* sem suporte */ } }
+    document.getElementById('focus-ring-label').textContent = 'Tempo esgotado! 🎉';
     anunciarParaLeitorDeTela('Tempo de foco encerrado.');
   }
 }
@@ -1795,6 +1857,23 @@ function tocarSom() {
     gain.gain.setValueAtTime(0.15, ctx.currentTime);
     osc.start();
     osc.stop(ctx.currentTime + 0.25);
+  } catch (e) { /* som não suportado, seguir sem erro */ }
+}
+
+// Som de "tempo esgotado" do Modo Foco: 3 bipes curtos e mais audíveis
+function tocarSomFimDoFoco() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [0, 0.28, 0.56].forEach((atraso, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = i === 2 ? 880 : 660;
+      const inicio = ctx.currentTime + atraso;
+      gain.gain.setValueAtTime(0.22, inicio);
+      osc.start(inicio);
+      osc.stop(inicio + 0.22);
+    });
   } catch (e) { /* som não suportado, seguir sem erro */ }
 }
 
