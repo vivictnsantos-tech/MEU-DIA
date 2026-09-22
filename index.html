@@ -18,7 +18,21 @@
      ============================================================ -->
 <section id="screen-welcome" class="screen screen-welcome" aria-label="Boas-vindas">
   <div class="welcome-card">
-    <div class="welcome-icon" aria-hidden="true">🌿</div>
+    <button id="btn-skip-onboarding" class="skip-link" type="button">Pular</button>
+
+    <svg class="welcome-illustration" viewBox="0 0 200 140" aria-hidden="true">
+      <ellipse cx="100" cy="128" rx="70" ry="8" fill="var(--petroleo-light)"></ellipse>
+      <rect x="30" y="70" width="60" height="14" rx="3" fill="var(--branco)" stroke="var(--border)"></rect>
+      <rect x="34" y="58" width="52" height="14" rx="3" fill="var(--branco)" stroke="var(--border)"></rect>
+      <rect x="38" y="46" width="44" height="14" rx="3" fill="var(--coral-light)" stroke="var(--coral)"></rect>
+      <path d="M120 90 C118 70 130 55 128 40" stroke="var(--baixa)" stroke-width="4" fill="none" stroke-linecap="round"></path>
+      <path d="M128 40 C120 38 112 44 112 52" stroke="var(--baixa)" stroke-width="4" fill="none" stroke-linecap="round"></path>
+      <path d="M128 40 C136 40 142 48 140 56" stroke="var(--baixa)" stroke-width="4" fill="none" stroke-linecap="round"></path>
+      <rect x="104" y="88" width="34" height="26" rx="6" fill="var(--petroleo-light)"></rect>
+      <path d="M138 96 q10 2 8 14 q-2 8 -10 6" fill="none" stroke="var(--petroleo)" stroke-width="4" stroke-linecap="round"></path>
+      <text x="121" y="105" font-size="9" text-anchor="middle" fill="var(--petroleo-dark)" font-weight="700">✓</text>
+    </svg>
+
     <h1>Bem-vinda ao Meu Dia</h1>
     <p class="welcome-text">
       Um espaço simples para organizar suas atividades, compromissos e rotinas —

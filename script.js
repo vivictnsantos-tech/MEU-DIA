@@ -1999,6 +1999,14 @@ function configurarOnboarding() {
       });
     }
   });
+
+  document.getElementById('btn-skip-onboarding').addEventListener('click', () => {
+    state.settings.onboarded = true;
+    salvarSettings();
+    document.getElementById('screen-welcome').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+    irParaTela('screen-today');
+  });
 }
 
 /* ================================================================
