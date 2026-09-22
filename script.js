@@ -1991,6 +1991,13 @@ function configurarOnboarding() {
   });
 
   document.getElementById('btn-goto-profile').addEventListener('click', () => {
+    // Se a pessoa já preencheu nome/categorias antes, "Começar" pula direto pro app
+    if (state.settings.onboarded) {
+      document.getElementById('screen-welcome').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+      irParaTela('screen-today');
+      return;
+    }
     document.getElementById('screen-welcome').classList.add('hidden');
     document.getElementById('screen-welcome-profile').classList.remove('hidden');
     document.getElementById('onboard-name').focus();
@@ -2102,11 +2109,8 @@ function inicializar() {
     atualizarVisibilidadeCamposConforme();
   });
 
-  if (state.settings.onboarded) {
-    document.getElementById('screen-welcome').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    irParaTela('screen-today');
-  }
+  // A tela de boas-vindas sempre aparece ao abrir o app (mesmo depois da primeira vez).
+  // "Pular" ou "Começar" levam para dentro do app normalmente.
 
   setInterval(verificarLembretes, 20000);
   verificarLembretes();
