@@ -4,7 +4,7 @@
    e por exibir notificações locais quando o navegador permitir.
    ============================================================ */
 
-const CACHE_NAME = 'meu-dia-cache-v2';
+const CACHE_NAME = 'meu-dia-cache-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -12,7 +12,8 @@ const APP_SHELL = [
   './script.js',
   './manifest.json',
   './icons/icon-192.png',
-  './icons/icon-512.png'
+  './icons/icon-512.png',
+  './illustrations/boas-vindas.png'
 ];
 
 // Instala o service worker e guarda os arquivos essenciais em cache
