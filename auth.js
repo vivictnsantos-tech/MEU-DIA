@@ -43,6 +43,26 @@ async function verificarAprovacaoEProsseguir() {
     .maybeSingle();
 
   if (error || !perfil) {
+    // Pode ser um cadastro que ficou pela metade (ex: confirmação de e-mail no meio do caminho).
+    const pendente = localStorage.getItem('meudia_pending_profile');
+    if (pendente) {
+      try {
+        const dados = JSON.parse(pendente);
+        const { error: erroCriar } = await supabaseClient.from('profiles').insert({
+          id: usuario.id,
+          company_id: dados.companyId,
+          role: 'collaborator',
+          name: dados.name,
+          approved: false
+        });
+        if (!erroCriar) {
+          localStorage.removeItem('meudia_pending_profile');
+          mostrarSomenteEsteScreen('screen-auth-pending');
+          return;
+        }
+      } catch (e) { /* segue para o erro normal abaixo */ }
+    }
+
     mostrarErro('auth-login-error', 'Não encontramos seu cadastro. Tente novamente ou fale com seu gestor.');
     mostrarSomenteEsteScreen('screen-auth-login');
     return;
@@ -211,6 +231,10 @@ document.getElementById('btn-signup-submit').addEventListener('click', async () 
     return;
   }
 
+  // Guarda os dados do cadastro antes de criar o login — usado caso a confirmação
+  // de e-mail interrompa o processo no meio (ver verificarAprovacaoEProsseguir).
+  localStorage.setItem('meudia_pending_profile', JSON.stringify({ name: nome, companyId }));
+
   // 2. Cria o login
   const { data: signUpData, error: erroCadastro } = await supabaseClient.auth.signUp({
     email, password: senha
@@ -224,8 +248,10 @@ document.getElementById('btn-signup-submit').addEventListener('click', async () 
   }
 
   // 3. Se o Supabase exigir confirmação de e-mail, ainda não existe sessão ativa.
+  //    Os dados já ficaram salvos em localStorage (acima) e serão usados assim
+  //    que a pessoa confirmar o e-mail e voltar a abrir o app.
   if (!signUpData.session) {
-    mostrarErro('auth-signup-error', 'Verifique seu e-mail para confirmar o cadastro e depois volte para entrar.');
+    mostrarErro('auth-signup-error', 'Verifique seu e-mail para confirmar o cadastro. Depois, é só voltar e abrir o app normalmente.');
     mostrarSomenteEsteScreen('screen-auth-login');
     return;
   }
@@ -244,6 +270,7 @@ document.getElementById('btn-signup-submit').addEventListener('click', async () 
     return;
   }
 
+  localStorage.removeItem('meudia_pending_profile');
   mostrarSomenteEsteScreen('screen-auth-pending');
 });
 
