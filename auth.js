@@ -54,9 +54,72 @@ async function verificarAprovacaoEProsseguir() {
   }
 
   // Aprovado! Segue o fluxo normal do app (tela de boas-vindas / app principal).
+  window.meuDiaPerfil = perfil;
+  const itemAprovacoes = document.getElementById('more-manager-approvals');
+  if (itemAprovacoes) itemAprovacoes.classList.toggle('hidden', perfil.role !== 'manager');
+
   mostrarSomenteEsteScreen('screen-welcome');
   if (window.iniciarAppMeuDia) window.iniciarAppMeuDia();
 }
+
+// -----------------------------------------------------------
+// Painel do gestor: aprovar colaboradores pendentes
+// -----------------------------------------------------------
+window.renderizarAprovacoesPendentes = async function renderizarAprovacoesPendentes() {
+  const lista = document.getElementById('lista-aprovacoes');
+  const vazio = document.getElementById('aprovacoes-empty');
+  if (!lista) return;
+  lista.innerHTML = '<p class="hint-text">Carregando...</p>';
+
+  const { data: pendentes, error } = await supabaseClient
+    .from('profiles')
+    .select('id, name')
+    .eq('approved', false)
+    .eq('role', 'collaborator')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    lista.innerHTML = '<p class="hint-text">Não foi possível carregar agora. Tente de novo em instantes.</p>';
+    return;
+  }
+
+  if (!pendentes || pendentes.length === 0) {
+    lista.innerHTML = '';
+    vazio.classList.remove('hidden');
+    return;
+  }
+  vazio.classList.add('hidden');
+
+  lista.innerHTML = pendentes.map((p) => `
+    <div class="settings-row" data-id="${p.id}" style="align-items:center;">
+      <span>${p.name}</span>
+      <button class="btn btn-primary btn-aprovar" style="padding:8px 16px;font-size:14px;">Aprovar</button>
+    </div>
+  `).join('');
+
+  lista.querySelectorAll('.btn-aprovar').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      const linha = ev.target.closest('[data-id]');
+      const id = linha.dataset.id;
+      btn.disabled = true;
+      btn.textContent = 'Aprovando...';
+      const { error: erroAprovar } = await supabaseClient
+        .from('profiles')
+        .update({ approved: true })
+        .eq('id', id);
+      if (erroAprovar) {
+        btn.disabled = false;
+        btn.textContent = 'Aprovar';
+        alert('Não foi possível aprovar agora. Tente novamente.');
+        return;
+      }
+      linha.remove();
+      if (!lista.querySelector('[data-id]')) {
+        vazio.classList.remove('hidden');
+      }
+    });
+  });
+};
 
 // -----------------------------------------------------------
 // Formulário de login
