@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Meu Dia — Agenda Flexível</title>
+<meta name="description" content="Agenda flexível com checklist para organizar seu dia, pensada para quem tem dificuldade de concentração.">
+<meta name="theme-color" content="#1F5C54">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN
+     ============================================================ -->
+<section id="screen-auth-login" class="screen screen-welcome active" aria-label="Entrar">
+  <div class="welcome-card">
+    <h1 style="font-size:22px;">Entrar no Meu Dia</h1>
+    <p id="auth-login-error" class="auth-error hidden"></p>
+
+    <label class="field">
+      <span>E-mail</span>
+      <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="username">
+    </label>
+    <label class="field">
+      <span>Senha</span>
+      <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password">
+    </label>
+
+    <button id="btn-login-submit" class="btn btn-primary btn-block">Entrar</button>
+    <button id="btn-goto-signup" class="btn btn-secondary btn-block" type="button" style="margin-top:10px;">Criar minha conta</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     CADASTRO
+     ============================================================ -->
+<section id="screen-auth-signup" class="screen screen-welcome hidden" aria-label="Criar conta">
+  <div class="welcome-card">
+    <button id="btn-back-login" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
+    <h1 style="font-size:22px;">Criar minha conta</h1>
+    <p id="auth-signup-error" class="auth-error hidden"></p>
+
+    <label class="field">
+      <span>Seu nome</span>
+      <input type="text" id="signup-name" placeholder="Seu nome" maxlength="40">
+    </label>
+    <label class="field">
+      <span>Código da empresa</span>
+      <input type="text" id="signup-company-code" placeholder="Código que seu gestor te passou">
+    </label>
+    <label class="field">
+      <span>E-mail</span>
+      <input type="email" id="signup-email" placeholder="seu@email.com" autocomplete="username">
+    </label>
+    <label class="field">
+      <span>Senha</span>
+      <input type="password" id="signup-password" placeholder="Crie uma senha" autocomplete="new-password">
+    </label>
+
+    <button id="btn-signup-submit" class="btn btn-primary btn-block">Cadastrar</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     AGUARDANDO APROVAÇÃO
+     ============================================================ -->
+<section id="screen-auth-pending" class="screen screen-welcome hidden" aria-label="Aguardando aprovação">
+  <div class="welcome-card">
+    <h1 style="font-size:22px;">Quase lá!</h1>
+    <p class="welcome-text">
+      Sua conta foi criada. Agora é só esperar seu gestor aprovar seu acesso —
+      assim que isso acontecer, você já pode usar o Meu Dia normalmente.
+    </p>
+    <button id="btn-check-approval" class="btn btn-primary btn-block">Verificar novamente</button>
+    <button id="btn-logout-pending" class="btn btn-secondary btn-block" type="button" style="margin-top:10px;">Sair</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     TELA DE BOAS-VINDAS (etapa 1 — intro, sozinha)
+     ============================================================ -->
+<section id="screen-welcome" class="screen screen-welcome hidden" aria-label="Boas-vindas">
+  <div class="welcome-card welcome-card-intro">
+    <button id="btn-skip-onboarding" class="skip-link" type="button">Pular</button>
+
+    <img src="illustrations/boas-vindas.png" alt="" class="welcome-illustration">
+
+    <h1>Bem-vinda ao Meu Dia</h1>
+    <p class="welcome-text">
+      Um espaço simples para organizar suas atividades, compromissos e rotinas —
+      sem pressão, sem excesso de informação. Você decide o que aparece e quando.
+    </p>
+
+    <button id="btn-goto-profile" class="btn btn-primary btn-block">Começar</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     TELA DE BOAS-VINDAS (etapa 2 — nome e categorias)
+     ============================================================ -->
+<section id="screen-welcome-profile" class="screen screen-welcome hidden" aria-label="Seu perfil">
+  <div class="welcome-card">
+    <button id="btn-back-intro" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
+    <h1 style="font-size:22px;">Como podemos te chamar?</h1>
+
+    <label class="field" style="margin-top:18px;">
+      <span>Seu nome <span class="optional">(opcional)</span></span>
+      <input type="text" id="onboard-name" placeholder="Seu nome" aria-label="Seu nome" maxlength="40">
+    </label>
+
+    <fieldset class="field">
+      <legend>Quais áreas fazem mais parte do seu dia a dia? <span class="optional">(opcional)</span></legend>
+      <div class="chip-group" id="onboard-categories">
+        <button type="button" class="chip" data-cat="Trabalho">Trabalho</button>
+        <button type="button" class="chip" data-cat="Casa">Casa</button>
+        <button type="button" class="chip" data-cat="Saúde">Saúde</button>
+        <button type="button" class="chip" data-cat="Estudos">Estudos</button>
+        <button type="button" class="chip" data-cat="Lazer">Lazer</button>
+        <button type="button" class="chip" data-cat="Pessoal">Pessoal</button>
+      </div>
+    </fieldset>
+
+    <label class="field field-inline">
+      <input type="checkbox" id="onboard-notifications">
+      <span>Quero ativar lembretes e notificações</span>
+    </label>
+
+    <button id="btn-start" class="btn btn-primary btn-block">Concluir</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     APP PRINCIPAL
+     ============================================================ -->
+<div id="app" class="app hidden">
+
+  <!-- Cabeçalho -->
+  <header class="app-header">
+    <div>
+      <p class="greeting" id="greeting-text">Olá</p>
+      <p class="today-date" id="header-date"></p>
+    </div>
+    <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações">⚙️</button>
+  </header>
+
+  <!-- ================= TELA: HOJE ================= -->
+  <section id="screen-today" class="screen view active" aria-label="Hoje">
+    <div id="next-appointment" class="next-appointment hidden"></div>
+
+    <div class="progress-block">
+      <div class="progress-block-header">
+        <span>Seu progresso hoje</span>
+        <strong id="today-progress-count">0 de 0</strong>
+      </div>
+      <div class="progress-bar-track">
+        <div id="today-progress-bar" class="progress-bar-fill"></div>
+      </div>
+      <p class="progress-label" id="today-progress-label">0 de 0 concluídas</p>
+    </div>
+
+    <div id="today-priorities" class="priorities-block hidden">
+      <h2 class="section-title">Prioridades de hoje</h2>
+      <div id="today-priorities-list" class="priority-list"></div>
+    </div>
+
+    <div class="list-toolbar">
+      <input type="search" id="today-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de hoje">
+      <button id="btn-toggle-done-today" class="btn btn-ghost btn-small">Ocultar concluídas</button>
+    </div>
+
+    <h2 class="section-title">Pendentes</h2>
+    <ul id="today-pending-list" class="activity-list"></ul>
+    <p id="today-empty" class="empty-state hidden">Nenhuma atividade por aqui. Que tal adicionar algo com o botão “+”?</p>
+
+    <h2 class="section-title">Concluídas</h2>
+    <ul id="today-done-list" class="activity-list"></ul>
+
+    <p class="quote-box"><span class="qb-icon">🌿</span><span id="today-quote">Disciplina de hoje, conquistas de amanhã.</span></p>
+  </section>
+
+  <!-- ================= TELA: AMANHÃ ================= -->
+  <section id="screen-tomorrow" class="screen view" aria-label="Amanhã">
+    <p class="tomorrow-date" id="tomorrow-date"></p>
+    <div class="list-toolbar">
+      <input type="search" id="tomorrow-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de amanhã">
+    </div>
+    <ul id="tomorrow-list" class="activity-list" data-sortable="true"></ul>
+    <p id="tomorrow-empty" class="empty-state hidden">Nada planejado para amanhã ainda.</p>
+    <p class="quote-box"><span class="qb-icon">🌅</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
+  </section>
+
+  <!-- ================= TELA: CALENDÁRIO ================= -->
+  <section id="screen-calendar" class="screen view" aria-label="Calendário">
+    <div class="calendar-toolbar">
+      <div class="segmented" id="calendar-mode">
+        <button class="segmented-btn active" data-mode="month">Mês</button>
+        <button class="segmented-btn" data-mode="week">Semana</button>
+      </div>
+      <div class="calendar-nav">
+        <button id="cal-prev" class="icon-btn" aria-label="Período anterior">‹</button>
+        <span id="cal-label" class="cal-label"></span>
+        <button id="cal-next" class="icon-btn" aria-label="Próximo período">›</button>
+      </div>
+    </div>
+
+    <div class="filters-row" id="calendar-filters">
+      <select id="filter-category" aria-label="Filtrar por categoria">
+        <option value="">Categoria: todas</option>
+      </select>
+      <select id="filter-priority" aria-label="Filtrar por prioridade">
+        <option value="">Prioridade: todas</option>
+        <option value="alta">Alta</option>
+        <option value="media">Média</option>
+        <option value="baixa">Baixa</option>
+      </select>
+      <select id="filter-status" aria-label="Filtrar por situação">
+        <option value="">Situação: todas</option>
+        <option value="pendente">Pendentes</option>
+        <option value="concluida">Concluídas</option>
+      </select>
+    </div>
+
+    <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Grade do calendário"></div>
+
+    <h2 class="section-title" id="calendar-day-title">Selecione um dia</h2>
+    <ul id="calendar-day-list" class="activity-list"></ul>
+    <p class="quote-box"><span class="qb-icon">🗓️</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
+  </section>
+
+  <!-- ================= TELA: PENDENTES ================= -->
+  <section id="screen-pending" class="screen view" aria-label="Pendentes">
+    <div class="filter-pills" id="pending-filter-pills">
+      <button class="filter-pill active" data-filter="todos">Todos</button>
+      <button class="filter-pill" data-filter="atrasadas">Atrasadas</button>
+      <button class="filter-pill" data-filter="sem-data">Sem data</button>
+    </div>
+    <div id="pending-overdue-banner" class="overdue-banner hidden">
+      <span class="ob-icon">⏰</span>
+      <div><strong>Você tem tarefas em aberto</strong><span>Tudo bem! Reorganize e siga em frente.</span></div>
+    </div>
+    <ul id="pending-list" class="activity-list"></ul>
+    <p id="pending-empty" class="empty-state hidden">Você está em dia — nenhuma pendência antiga. 🌿</p>
+  </section>
+
+  <!-- ================= TELA: ROTINAS ================= -->
+  <section id="screen-routines" class="screen view" aria-label="Rotinas">
+    <p class="hint-text">Pequenas ações, grandes resultados.</p>
+    <button id="btn-new-routine" class="btn btn-secondary btn-block" style="margin-bottom:16px;">+ Nova rotina</button>
+    <ul id="routines-list" class="activity-list"></ul>
+    <p id="routines-empty" class="empty-state hidden">Nenhuma rotina criada ainda.</p>
+    <p class="quote-box"><span class="qb-icon">🌱</span><span>Rotina é o caminho para a vida que você quer.</span></p>
+  </section>
+
+  <!-- ================= TELA: MAIS (menu) ================= -->
+  <section id="screen-more" class="screen view" aria-label="Mais">
+    <ul class="more-menu">
+      <li><button class="more-item" data-target="screen-progress">📈 <span>Progresso</span></button></li>
+      <li><button class="more-item" data-target="screen-categories">🏷️ <span>Categorias</span></button></li>
+      <li><button class="more-item" id="more-settings">⚙️ <span>Configurações</span></button></li>
+      <li><button class="more-item" id="more-capacitor">📱 <span>Levar para o celular (Capacitor)</span></button></li>
+    </ul>
+  </section>
+
+  <!-- ================= TELA: PROGRESSO ================= -->
+  <section id="screen-progress" class="screen view" aria-label="Progresso">
+    <button class="btn-back" data-back="screen-more">← Voltar</button>
+
+    <div class="progress-donut-card">
+      <div class="donut-wrap">
+        <svg viewBox="0 0 100 100" width="96" height="96" aria-hidden="true">
+          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--petroleo-light)" stroke-width="10"></circle>
+          <circle id="donut-circle" cx="50" cy="50" r="42" fill="none" stroke="var(--petroleo)" stroke-width="10" stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"></circle>
+        </svg>
+        <div class="donut-percent" id="donut-percent">0%</div>
+      </div>
+      <div class="donut-caption">
+        <strong>Tarefas concluídas hoje</strong>
+        <span id="donut-caption-text">0 de 0</span>
+      </div>
+    </div>
+
+    <div class="progress-grid">
+      <div class="stat-card">
+        <p class="stat-number" id="stat-done-today">0</p>
+        <p class="stat-label">concluídas hoje</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-number" id="stat-pending-today">0</p>
+        <p class="stat-label">pendentes hoje</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-number" id="stat-percent-today">0%</p>
+        <p class="stat-label">do dia concluído</p>
+      </div>
+      <div class="stat-card">
+        <p class="stat-number" id="stat-streak">0</p>
+        <p class="stat-label">dias seguidos usando</p>
+      </div>
+    </div>
+
+    <h2 class="section-title">Últimos 7 dias</h2>
+    <div class="week-chart-card">
+      <div id="week-chart" class="week-chart" role="img" aria-label="Gráfico de atividades concluídas nos últimos sete dias"></div>
+    </div>
+
+    <h2 class="section-title">Categorias com mais atividades</h2>
+    <div id="category-ranking" class="category-ranking"></div>
+
+    <p class="encouragement" id="encouragement-msg"></p>
+  </section>
+
+  <!-- ================= TELA: CATEGORIAS ================= -->
+  <section id="screen-categories" class="screen view" aria-label="Categorias">
+    <button class="btn-back" data-back="screen-more">← Voltar</button>
+    <button id="btn-new-category" class="btn btn-secondary btn-block">+ Nova categoria</button>
+    <ul id="categories-list" class="category-list"></ul>
+  </section>
+
+  <!-- ================= TELA: CONFIGURAÇÕES ================= -->
+  <section id="screen-settings" class="screen view" aria-label="Configurações">
+    <button class="btn-back" data-back="screen-more">← Voltar</button>
+    <p class="hint-text">Deixe o app com a sua cara.</p>
+
+    <div class="settings-section">
+      <p class="settings-section-title">👤 Seu nome</p>
+      <label class="field" style="padding-bottom:14px;">
+        <input type="text" id="settings-name" maxlength="40" placeholder="Como podemos te chamar?">
+      </label>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section-title">☀️ Aparência</p>
+      <div class="settings-row">
+        <span>Modo escuro</span>
+        <label class="switch"><input type="checkbox" id="settings-dark"><span class="slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <span>Primeiro dia da semana</span>
+        <select id="settings-first-day" style="width:auto;padding:8px 10px;">
+          <option value="0">Domingo</option>
+          <option value="1">Segunda-feira</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section-title">🔔 Notificações</p>
+      <div class="settings-row">
+        <span>Lembretes de tarefas</span>
+        <label class="switch"><input type="checkbox" id="settings-notifications"><span class="slider"></span></label>
+      </div>
+      <div class="settings-row">
+        <span>Sons</span>
+        <label class="switch"><input type="checkbox" id="settings-sounds"><span class="slider"></span></label>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section-title">🏷️ Categorias</p>
+      <div class="settings-row linklike" id="settings-manage-categories">
+        <span>Gerenciar categorias</span>
+        <span>›</span>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section-title">☁️ Backup e dados</p>
+      <div class="settings-row linklike" id="btn-export">
+        <span>Exportar dados (backup)</span>
+        <span>›</span>
+      </div>
+      <div class="settings-row linklike file-btn" style="padding:0;">
+        <label style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:13px 0;cursor:pointer;">
+          <span>Importar dados</span>
+          <span>›</span>
+          <input type="file" id="btn-import" accept="application/json" hidden>
+        </label>
+      </div>
+      <div class="settings-row linklike" id="btn-clear-data" style="color:#B0392A;">
+        <span>Apagar todos os dados</span>
+        <span>›</span>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <p class="settings-section-title">🔑 Conta</p>
+      <div class="settings-row linklike" id="btn-logout" style="color:#B0392A;">
+        <span>Sair</span>
+        <span>›</span>
+      </div>
+    </div>
+
+    <details class="info-details">
+      <summary>Sobre privacidade</summary>
+      <p>Todos os seus dados ficam salvos apenas neste dispositivo, no armazenamento local do navegador (LocalStorage). Nada é enviado para nenhum servidor.</p>
+    </details>
+    <details class="info-details">
+      <summary>Limitações dos lembretes</summary>
+      <p>Como este é um aplicativo web, os lembretes funcionam enquanto o app estiver aberto ou em segundo plano no navegador. Com o app totalmente fechado, o navegador pode não conseguir disparar notificações — assim como qualquer site. Para lembretes confiáveis mesmo fechado, veja a opção "Levar para o celular" no menu Mais.</p>
+    </details>
+
+    <p class="quote-box" style="margin-top:16px;"><span class="qb-icon">⚙️</span><span>Organização de hoje, para um amanhã mais leve.</span></p>
+  </section>
+
+  <!-- Botão flutuante de adicionar -->
+  <button id="fab-add" class="fab" aria-label="Adicionar atividade">+</button>
+
+  <!-- Menu inferior -->
+  <nav class="bottom-nav" aria-label="Navegação principal">
+    <button class="nav-item active" data-screen="screen-today"><span class="nav-icon">🏠</span><span>Hoje</span></button>
+    <button class="nav-item" data-screen="screen-tomorrow"><span class="nav-icon">🌤️</span><span>Amanhã</span></button>
+    <button class="nav-item" data-screen="screen-calendar"><span class="nav-icon">🗓️</span><span>Calendário</span></button>
+    <button class="nav-item" data-screen="screen-routines"><span class="nav-icon">🔁</span><span>Rotinas</span></button>
+    <button class="nav-item" data-screen="screen-more"><span class="nav-icon">⋯</span><span>Mais</span></button>
+  </nav>
+</div>
+
+<!-- ============================================================
+     MODAL: CADASTRO / EDIÇÃO DE ATIVIDADE
+     ============================================================ -->
+<div id="modal-activity" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="activity-modal-title">
+  <div class="modal-sheet">
+    <div class="modal-header">
+      <h2 id="activity-modal-title">Nova atividade</h2>
+      <button class="icon-btn" id="btn-close-activity" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-activity" class="modal-body">
+      <input type="hidden" id="act-id">
+
+      <label class="field">
+        <span>Título <span class="required">*</span></span>
+        <input type="text" id="act-title" required maxlength="80" aria-required="true">
+      </label>
+      <p class="field-error hidden" id="act-title-error">Digite um título para salvar a atividade.</p>
+
+      <label class="field">
+        <span>Descrição <span class="optional">(opcional)</span></span>
+        <textarea id="act-description" rows="2" maxlength="300"></textarea>
+      </label>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Tipo</span>
+          <select id="act-type">
+            <option value="tarefa">Tarefa</option>
+            <option value="compromisso">Compromisso</option>
+            <option value="reuniao">Reunião</option>
+            <option value="lembrete">Lembrete</option>
+            <option value="rotina">Rotina</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Prioridade</span>
+          <select id="act-priority">
+            <option value="baixa">Baixa</option>
+            <option value="media" selected>Média</option>
+            <option value="alta">Alta</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Data</span>
+          <input type="date" id="act-date">
+        </label>
+        <label class="field">
+          <span>Categoria <span class="optional">(opcional)</span></span>
+          <select id="act-category">
+            <option value="">Sem categoria</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field field-inline">
+        <input type="checkbox" id="act-has-time">
+        <span>Definir horário para esta atividade</span>
+      </label>
+
+      <div class="field-row hidden" id="act-time-row">
+        <label class="field">
+          <span>Horário</span>
+          <input type="time" id="act-time">
+        </label>
+        <label class="field">
+          <span>Término <span class="optional">(opcional)</span></span>
+          <input type="time" id="act-end-time">
+        </label>
+      </div>
+
+      <div id="act-reminder-block" class="field hidden">
+        <span>Lembrete</span>
+        <select id="act-reminder">
+          <option value="">Sem lembrete</option>
+          <option value="0">Avisar no horário</option>
+          <option value="5">5 minutos antes</option>
+          <option value="10">10 minutos antes</option>
+          <option value="15">15 minutos antes</option>
+          <option value="30">30 minutos antes</option>
+          <option value="60">1 hora antes</option>
+          <option value="custom">Horário personalizado</option>
+        </select>
+        <input type="time" id="act-reminder-custom" class="hidden" aria-label="Horário personalizado do lembrete">
+      </div>
+
+      <div id="act-recurrence-block" class="field">
+        <span>Repetição <span class="optional">(opcional)</span></span>
+        <select id="act-recurrence">
+          <option value="">Não repetir</option>
+          <option value="daily">Todos os dias</option>
+          <option value="weekdays">Apenas dias úteis</option>
+          <option value="weekly">Semanalmente</option>
+          <option value="monthly">Mensalmente</option>
+          <option value="custom-days">Dias específicos da semana</option>
+          <option value="interval">Intervalo personalizado (dias)</option>
+        </select>
+        <div id="recurrence-days" class="chip-group hidden">
+          <button type="button" class="chip" data-day="0">Dom</button>
+          <button type="button" class="chip" data-day="1">Seg</button>
+          <button type="button" class="chip" data-day="2">Ter</button>
+          <button type="button" class="chip" data-day="3">Qua</button>
+          <button type="button" class="chip" data-day="4">Qui</button>
+          <button type="button" class="chip" data-day="5">Sex</button>
+          <button type="button" class="chip" data-day="6">Sáb</button>
+        </div>
+        <input type="number" id="recurrence-interval" class="hidden" min="2" max="60" placeholder="A cada quantos dias?">
+        <label class="field-inline-small hidden" id="recurrence-end-block">
+          <span>Terminar em <span class="optional">(opcional)</span></span>
+          <input type="date" id="recurrence-end">
+        </label>
+      </div>
+
+      <div class="field">
+        <div class="field-label-row">
+          <span>Subtarefas <span class="optional">(opcional)</span></span>
+          <button type="button" id="btn-add-subtask" class="btn btn-ghost btn-small">Dividir em etapas</button>
+        </div>
+        <ul id="act-subtasks-list" class="subtask-edit-list"></ul>
+      </div>
+
+      <label class="field">
+        <span>Observações <span class="optional">(opcional)</span></span>
+        <textarea id="act-notes" rows="2" maxlength="300"></textarea>
+      </label>
+
+      <label class="field field-inline">
+        <input type="checkbox" id="act-focus-mode">
+        <span>Permitir Modo Foco nesta atividade</span>
+      </label>
+
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary btn-block">Salvar atividade</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: AÇÕES DA ATIVIDADE (menu de opções)
+     ============================================================ -->
+<div id="modal-item-actions" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-sheet modal-sheet-small">
+    <div class="modal-header">
+      <h2 id="item-actions-title">Atividade</h2>
+      <button class="icon-btn" id="btn-close-item-actions" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body action-menu" id="item-actions-body"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: ESCOLHER DATA
+     ============================================================ -->
+<div id="modal-date-picker" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-sheet modal-sheet-small">
+    <div class="modal-header">
+      <h2>Escolher outra data</h2>
+      <button class="icon-btn" id="btn-close-date-picker" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="field">
+        <span>Nova data</span>
+        <input type="date" id="date-picker-input">
+      </label>
+      <button id="btn-confirm-date" class="btn btn-primary btn-block">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: PENDÊNCIA (o que deseja fazer?)
+     ============================================================ -->
+<div id="modal-pending-resolve" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-sheet modal-sheet-small">
+    <div class="modal-header">
+      <h2>O que deseja fazer?</h2>
+      <button class="icon-btn" id="btn-close-pending-resolve" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="pending-resolve-text" class="hint-text"></p>
+      <div class="action-menu" id="pending-resolve-actions"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: CONFIRMAÇÃO GENÉRICA (excluir, apagar dados...)
+     ============================================================ -->
+<div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-sheet modal-sheet-small">
+    <div class="modal-body">
+      <p id="confirm-text" class="hint-text"></p>
+      <div class="confirm-actions">
+        <button id="btn-confirm-cancel" class="btn btn-ghost btn-block">Cancelar</button>
+        <button id="btn-confirm-ok" class="btn btn-danger btn-block">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: NOVA / EDITAR CATEGORIA
+     ============================================================ -->
+<div id="modal-category" class="modal-overlay hidden" role="dialog" aria-modal="true">
+  <div class="modal-sheet modal-sheet-small">
+    <div class="modal-header">
+      <h2 id="category-modal-title">Nova categoria</h2>
+      <button class="icon-btn" id="btn-close-category" aria-label="Fechar">✕</button>
+    </div>
+    <form id="form-category" class="modal-body">
+      <input type="hidden" id="cat-id">
+      <label class="field">
+        <span>Nome</span>
+        <input type="text" id="cat-name" required maxlength="30">
+      </label>
+      <label class="field">
+        <span>Cor</span>
+        <input type="color" id="cat-color" value="#1F5C54">
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Salvar categoria</button>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODO FOCO (tela cheia)
+     ============================================================ -->
+<div id="focus-mode" class="focus-overlay hidden" role="dialog" aria-modal="true" aria-label="Modo Foco">
+  <button id="btn-exit-focus" class="icon-btn focus-exit" aria-label="Sair do Modo Foco">✕ Sair</button>
+  <div class="focus-content">
+    <p class="focus-eyebrow">Modo Foco</p>
+    <h2 id="focus-title">Nome da atividade</h2>
+    <ul id="focus-subtasks" class="focus-subtasks"></ul>
+
+    <div id="focus-time-choices" class="focus-time-choices">
+      <button class="chip" data-minutes="5">Só 5 minutos</button>
+      <button class="chip" data-minutes="10">10 minutos</button>
+      <button class="chip" data-minutes="15">15 minutos</button>
+      <button class="chip" data-minutes="25">25 minutos</button>
+      <button class="chip" data-minutes="custom">Personalizado</button>
+    </div>
+    <input type="number" id="focus-custom-minutes" class="hidden" min="1" max="180" placeholder="Minutos">
+
+    <div id="focus-ring-wrap" class="focus-ring-wrap hidden">
+      <svg viewBox="0 0 220 220">
+        <circle class="focus-ring-track" cx="110" cy="110" r="98"></circle>
+        <circle id="focus-ring-progress" class="focus-ring-progress" cx="110" cy="110" r="98" stroke-dasharray="616" stroke-dashoffset="0"></circle>
+      </svg>
+      <div class="focus-ring-center">
+        <span id="focus-ring-label" class="focus-ring-label">Foco em</span>
+        <p id="focus-timer" class="focus-timer">25:00</p>
+      </div>
+    </div>
+
+    <div class="focus-controls">
+      <button id="focus-start" class="btn btn-primary">Iniciar</button>
+      <button id="focus-pause" class="btn btn-secondary hidden">Pausar</button>
+      <button id="focus-stop" class="btn btn-ghost hidden">Encerrar</button>
+      <button id="focus-complete" class="btn btn-primary">Concluir atividade</button>
+    </div>
+
+    <p class="quote-box" style="margin-top:18px;background:rgba(255,255,255,0.08);color:var(--branco);"><span class="qb-icon">🌱</span><span>Tempo bem usado também é cuidado.</span></p>
+  </div>
+</div>
+
+<!-- ============================================================
+     NOTIFICAÇÃO VISUAL INTERNA (toast de lembrete)
+     ============================================================ -->
+<div id="reminder-toast" class="reminder-toast hidden" role="alert">
+  <p id="reminder-toast-title" class="reminder-toast-title"></p>
+  <div class="reminder-toast-actions">
+    <button data-action="complete" class="btn btn-primary btn-small">Concluir</button>
+    <button data-action="open" class="btn btn-secondary btn-small">Abrir</button>
+    <button data-action="snooze5" class="btn btn-ghost btn-small">+5min</button>
+    <button data-action="snooze10" class="btn btn-ghost btn-small">+10min</button>
+    <button data-action="snooze15" class="btn btn-ghost btn-small">+15min</button>
+    <button data-action="snooze30" class="btn btn-ghost btn-small">+30min</button>
+    <button data-action="dismiss" class="btn btn-ghost btn-small">Dispensar</button>
+  </div>
+</div>
+
+<!-- Mensagem de status para leitores de tela -->
+<div id="aria-live" class="sr-only" aria-live="polite"></div>
+
+<!-- Banner de instalação para iPhone (Safari não permite prompt automático nativo) -->
+<div id="ios-install-banner" class="ios-install-banner hidden">
+  <span class="ios-install-icon">📲</span>
+  <div class="ios-install-text">
+    <strong>Instale o Meu Dia no seu iPhone</strong>
+    <span>Toque em <strong>Compartilhar</strong> <span class="ios-share-icon">⬆️</span> e depois em <strong>"Adicionar à Tela de Início"</strong></span>
+  </div>
+  <button id="btn-close-ios-banner" class="icon-btn" aria-label="Fechar aviso de instalação">✕</button>
+</div>
+
+<script src="auth.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
