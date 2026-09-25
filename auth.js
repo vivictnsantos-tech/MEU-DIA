@@ -167,3 +167,15 @@ document.getElementById('btn-logout-pending').addEventListener('click', async ()
 // Ao abrir o app: já tem sessão salva?
 // -----------------------------------------------------------
 document.addEventListener('DOMContentLoaded', verificarAprovacaoEProsseguir);
+
+// -----------------------------------------------------------
+// Botão "Sair" (dentro de Configurações)
+// -----------------------------------------------------------
+const botaoSair = document.getElementById('btn-logout');
+if (botaoSair) {
+  botaoSair.addEventListener('click', async () => {
+    if (!confirm('Tem certeza que deseja sair da sua conta?')) return;
+    await supabaseClient.auth.signOut();
+    location.reload();
+  });
+}
