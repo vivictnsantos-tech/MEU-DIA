@@ -2136,4 +2136,5 @@ function inicializar() {
   verificarAvisoInstalacaoIOS();
 }
 
-document.addEventListener('DOMContentLoaded', inicializar);
+// A inicialização agora só acontece depois do login aprovado (ver auth.js).
+window.iniciarAppMeuDia = inicializar;
