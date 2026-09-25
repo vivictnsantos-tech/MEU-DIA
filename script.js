@@ -68,6 +68,8 @@ function horaAtualStr() {
 }
 
 function gerarId(prefixo) {
+  // IDs agora sempre em formato UUID, compatível com o banco de dados (Supabase).
+  if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
   return `${prefixo}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
@@ -182,7 +184,10 @@ function carregarEstado() {
 
 function salvarAtividades() { salvar(CHAVES.activities, state.activities); }
 function salvarRotinas() { salvar(CHAVES.routines, state.routines); }
-function salvarCategorias() { salvar(CHAVES.categories, state.categories); }
+function salvarCategorias() {
+  salvar(CHAVES.categories, state.categories);
+  if (window.sincronizarCategoriasNoServidor) window.sincronizarCategoriasNoServidor(state.categories);
+}
 function salvarSettings() { salvar(CHAVES.settings, state.settings); }
 function salvarCompletions() { salvar(CHAVES.completions, state.completions); }
 function salvarFired() { salvar(CHAVES.fired, state.fired); }
