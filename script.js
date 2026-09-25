@@ -460,6 +460,7 @@ function renderizarTelaAtual(idTela) {
     case 'screen-progress': renderizarProgresso(); break;
     case 'screen-categories': renderizarCategorias(); break;
     case 'screen-settings': renderizarConfiguracoes(); break;
+    case 'screen-manager-approvals': if (window.renderizarAprovacoesPendentes) window.renderizarAprovacoesPendentes(); break;
   }
 }
 
@@ -474,7 +475,6 @@ function configurarNavegacao() {
     btn.addEventListener('click', () => irParaTela(btn.dataset.back));
   });
   document.getElementById('more-settings').addEventListener('click', () => irParaTela('screen-settings'));
-  document.getElementById('more-capacitor').addEventListener('click', mostrarInfoCapacitor);
 }
 
 function mostrarInfoCapacitor() {
