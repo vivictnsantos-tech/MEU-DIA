@@ -38,7 +38,7 @@ async function verificarAprovacaoEProsseguir() {
 
   const { data: perfil, error } = await supabaseClient
     .from('profiles')
-    .select('approved, role, name')
+    .select('approved, role, name, company_id')
     .eq('id', usuario.id)
     .maybeSingle();
 
@@ -58,9 +58,39 @@ async function verificarAprovacaoEProsseguir() {
   const itemAprovacoes = document.getElementById('more-manager-approvals');
   if (itemAprovacoes) itemAprovacoes.classList.toggle('hidden', perfil.role !== 'manager');
 
+  await sincronizarCategoriasDoServidor(perfil.company_id);
+
   mostrarSomenteEsteScreen('screen-welcome');
   if (window.iniciarAppMeuDia) window.iniciarAppMeuDia();
 }
+
+// -----------------------------------------------------------
+// Categorias: sincronização com o Supabase (compartilhadas por empresa)
+// -----------------------------------------------------------
+async function sincronizarCategoriasDoServidor(companyId) {
+  const { data, error } = await supabaseClient
+    .from('categories')
+    .select('id, name, color')
+    .eq('company_id', companyId);
+  if (!error && data) {
+    localStorage.setItem('meudia_categories', JSON.stringify(data));
+  }
+}
+
+window.sincronizarCategoriasNoServidor = async function sincronizarCategoriasNoServidor(categoriasLocais) {
+  if (!window.meuDiaPerfil || !window.meuDiaPerfil.company_id) return;
+  const companyId = window.meuDiaPerfil.company_id;
+
+  const linhas = categoriasLocais.map((c) => ({ id: c.id, company_id: companyId, name: c.name, color: c.color }));
+  if (linhas.length > 0) {
+    await supabaseClient.from('categories').upsert(linhas);
+  }
+
+  const idsLocais = categoriasLocais.map((c) => c.id);
+  let query = supabaseClient.from('categories').delete().eq('company_id', companyId);
+  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
+  await query;
+};
 
 // -----------------------------------------------------------
 // Painel do gestor: aprovar colaboradores pendentes
