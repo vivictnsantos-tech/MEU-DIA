@@ -405,6 +405,47 @@ window.renderizarTarefasEquipe = async function renderizarTarefasEquipe() {
       `).join('')}
     </div>
   `).join('');
+
+  // Preenche o seletor "Ver agenda completa de um colaborador"
+  const select = document.getElementById('select-membro-agenda');
+  if (select) {
+    const meuIdSelect = window.meuDiaPerfil.id;
+    const membros = (window.meuDiaMembros || []).filter((m) => m.id !== meuIdSelect);
+    select.innerHTML = membros.length
+      ? membros.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')
+      : '<option value="">Nenhum colaborador aprovado ainda</option>';
+  }
+};
+
+// -----------------------------------------------------------
+// Agenda completa de UM colaborador (visão do gestor): busca tudo o que
+// essa pessoa tem — o que o gestor atribuiu E o que ela mesma criou —
+// direto do servidor, sem mexer no localStorage da gestora.
+// -----------------------------------------------------------
+window.carregarAgendaDoMembro = async function carregarAgendaDoMembro(membroId) {
+  const [tarefasResp, rotinasResp] = await Promise.all([
+    supabaseClient.from('activities').select('*').eq('assigned_to', membroId).neq('type', 'rotina'),
+    supabaseClient.from('activities').select('*').eq('assigned_to', membroId).eq('type', 'rotina')
+  ]);
+
+  const activities = (!tarefasResp.error && tarefasResp.data) ? tarefasResp.data.map(linhaParaAtividade) : [];
+  const routines = (!rotinasResp.error && rotinasResp.data) ? rotinasResp.data.map(linhaParaRotina) : [];
+
+  let completions = {};
+  const idsRotinas = routines.map((r) => r.id);
+  if (idsRotinas.length > 0) {
+    const { data: ocorrencias, error: erroOcorrencias } = await supabaseClient
+      .from('activity_occurrences')
+      .select('activity_id, occurrence_date, completed, subtasks_state')
+      .in('activity_id', idsRotinas);
+    if (!erroOcorrencias && ocorrencias) {
+      ocorrencias.forEach((o) => {
+        completions[o.activity_id + '|' + o.occurrence_date] = { done: !!o.completed, subtasksDone: o.subtasks_state || {} };
+      });
+    }
+  }
+
+  return { activities, routines, completions };
 };
 
 function dataCurtaSimples(dataStr) {
