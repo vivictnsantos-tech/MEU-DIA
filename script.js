@@ -186,13 +186,19 @@ function salvarAtividades() {
   salvar(CHAVES.activities, state.activities);
   if (window.sincronizarAtividadesNoServidor) window.sincronizarAtividadesNoServidor(state.activities);
 }
-function salvarRotinas() { salvar(CHAVES.routines, state.routines); }
+function salvarRotinas() {
+  salvar(CHAVES.routines, state.routines);
+  if (window.sincronizarRotinasNoServidor) window.sincronizarRotinasNoServidor(state.routines);
+}
 function salvarCategorias() {
   salvar(CHAVES.categories, state.categories);
   if (window.sincronizarCategoriasNoServidor) window.sincronizarCategoriasNoServidor(state.categories);
 }
 function salvarSettings() { salvar(CHAVES.settings, state.settings); }
-function salvarCompletions() { salvar(CHAVES.completions, state.completions); }
+function salvarCompletions() {
+  salvar(CHAVES.completions, state.completions);
+  if (window.sincronizarCompletionsNoServidor) window.sincronizarCompletionsNoServidor(state.completions);
+}
 function salvarFired() { salvar(CHAVES.fired, state.fired); }
 function salvarHistory() { salvar(CHAVES.history, state.history); }
 
@@ -421,7 +427,9 @@ function transformarEmRotina(itemNormalizado, recorrencia) {
     notes: original.notes || '', focusModeAllowed: !!original.focusModeAllowed,
     recurrence: recorrencia || 'daily', days: [], interval: null,
     startDate: itemNormalizado.date, endDate: '', active: true, paused: false, skipDates: [],
-    createdAt: Date.now()
+    createdAt: Date.now(),
+    assignedTo: original.assignedTo || (window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined),
+    createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined
   };
   state.routines.push(nova);
   state.activities = state.activities.filter((a) => a.id !== itemNormalizado.id);
@@ -445,6 +453,10 @@ function irParaTela(idTela) {
   document.querySelectorAll('.view').forEach((el) => el.classList.remove('active'));
   const alvo = document.getElementById(idTela);
   if (alvo) alvo.classList.add('active');
+
+  // Lembra a última tela aberta para, ao atualizar a página, voltar direto
+  // pra ela em vez de recomeçar da tela de boas-vindas.
+  try { localStorage.setItem('meudia_last_screen', idTela); } catch (e) { /* ignora */ }
 
   document.querySelectorAll('.nav-item').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.screen === idTela);
@@ -1391,6 +1403,7 @@ function salvarAtividadeDoFormulario(titulo) {
   const recorrencia = document.getElementById('act-recurrence').value;
   const { reminderMinutes, reminderCustom } = lerReminderDoFormulario();
   const subtasksFinal = subtarefasEmEdicao.filter((s) => s.text.trim()).map((s) => ({ id: s.id, text: s.text.trim(), done: false }));
+  const responsaveisSelecionados = responsaveisMarcados();
 
   if (recorrencia) {
     // Salva como ROTINA
@@ -1406,6 +1419,7 @@ function salvarAtividadeDoFormulario(titulo) {
           time: horario, endTime: horarioFim, notes: notas, focusModeAllowed: focoPermitido,
           reminderMinutes, reminderCustom, recurrence: recorrencia, days: diasSelecionados,
           interval: intervalo, startDate: data, endDate: dataFim,
+          assignedTo: responsaveisSelecionados[0] || r.assignedTo,
           subtasks: mesclarSubtarefas(r.subtasks, subtasksFinal)
         });
       }
@@ -1416,14 +1430,15 @@ function salvarAtividadeDoFormulario(titulo) {
         focusModeAllowed: focoPermitido, type: 'rotina',
         reminderMinutes, reminderCustom, recurrence: recorrencia, days: diasSelecionados,
         interval: intervalo, startDate: data, endDate: dataFim, active: true, paused: false,
-        skipDates: [], subtasks: subtasksFinal, createdAt: Date.now()
+        skipDates: [], subtasks: subtasksFinal, createdAt: Date.now(),
+        assignedTo: responsaveisSelecionados[0] || (window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined),
+        createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined
       });
     }
     salvarRotinas();
   } else if (state.editingActivityId && !state.editingIsRoutine) {
     const a = state.activities.find((x) => x.id === state.editingActivityId);
     if (a) {
-      const responsaveisSelecionados = responsaveisMarcados();
       Object.assign(a, {
         title: titulo, description: descricao, type: tipo, priority: prioridade, date: data,
         category: categoria, time: horario, endTime: horarioFim, notes: notas,
@@ -1434,7 +1449,6 @@ function salvarAtividadeDoFormulario(titulo) {
       salvarAtividades();
     }
   } else {
-    const responsaveisSelecionados = responsaveisMarcados();
     const listaResponsaveis = responsaveisSelecionados.length > 0
       ? responsaveisSelecionados
       : [window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined];
@@ -2185,6 +2199,16 @@ function inicializar() {
 
   registrarServiceWorker();
   verificarAvisoInstalacaoIOS();
+
+  // Volta direto pra última tela usada (em vez de sempre abrir em "Hoje"),
+  // pra atualizar a página não "resetar" o que a pessoa estava vendo.
+  const souGestorAoIniciar = window.meuDiaPerfil && window.meuDiaPerfil.role === 'manager';
+  const telasSoDeGestor = ['screen-manager-approvals', 'screen-team-tasks'];
+  const ultimaTela = localStorage.getItem('meudia_last_screen');
+  if (ultimaTela && document.getElementById(ultimaTela) &&
+      (souGestorAoIniciar || !telasSoDeGestor.includes(ultimaTela))) {
+    irParaTela(ultimaTela);
+  }
 }
 
 // A inicialização agora só acontece depois do login aprovado (ver auth.js).
