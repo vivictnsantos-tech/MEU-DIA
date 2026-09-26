@@ -182,7 +182,10 @@ function carregarEstado() {
   state.history = carregar(CHAVES.history, {});
 }
 
-function salvarAtividades() { salvar(CHAVES.activities, state.activities); }
+function salvarAtividades() {
+  salvar(CHAVES.activities, state.activities);
+  if (window.sincronizarAtividadesNoServidor) window.sincronizarAtividadesNoServidor(state.activities);
+}
 function salvarRotinas() { salvar(CHAVES.routines, state.routines); }
 function salvarCategorias() {
   salvar(CHAVES.categories, state.categories);
@@ -1064,6 +1067,23 @@ function preencherSelectCategorias() {
   select.value = atual;
 }
 
+// Só o gestor vê e escolhe o responsável; para o colaborador, fica sempre ele mesmo.
+function preencherSelectResponsavel() {
+  const linha = document.getElementById('act-assignee-row');
+  const select = document.getElementById('act-assignee');
+  const membros = window.meuDiaMembros || [];
+  const souGestor = window.meuDiaPerfil && window.meuDiaPerfil.role === 'manager';
+
+  linha.classList.toggle('hidden', !souGestor);
+  select.innerHTML = '';
+  membros.forEach((m) => {
+    const opt = document.createElement('option');
+    opt.value = m.id; opt.textContent = m.name;
+    select.appendChild(opt);
+  });
+  if (!souGestor && window.meuDiaPerfil) select.value = window.meuDiaPerfil.id;
+}
+
 /* ================================================================
    11. PROGRESSO / ESTATÍSTICAS
    ================================================================ */
@@ -1181,6 +1201,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
   form.reset();
   document.getElementById('act-title-error').classList.add('hidden');
   preencherSelectCategorias();
+  preencherSelectResponsavel();
   subtarefasEmEdicao = [];
 
   const ehEdicao = !!itemParaEditar && !!objetoOriginalOuRotina(itemParaEditar, rotinaOriginal);
@@ -1225,6 +1246,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
       document.getElementById('act-has-time').checked = !!original.time;
       document.getElementById('act-notes').value = original.notes || '';
       document.getElementById('act-focus-mode').checked = !!original.focusModeAllowed;
+      document.getElementById('act-assignee').value = original.assignedTo || (window.meuDiaPerfil ? window.meuDiaPerfil.id : '');
       subtarefasEmEdicao = (original.subtasks || []).map((s) => ({ id: s.id, text: s.text }));
       configurarReminderUI(original.reminderMinutes, original.reminderCustom);
     }
@@ -1232,6 +1254,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     // Nova atividade
     document.getElementById('act-date').value = dataPredefinida || hojeStr();
     document.getElementById('act-has-time').checked = false;
+    document.getElementById('act-assignee').value = window.meuDiaPerfil ? window.meuDiaPerfil.id : '';
     configurarReminderUI(null, '');
   }
 
@@ -1394,6 +1417,7 @@ function salvarAtividadeDoFormulario(titulo) {
         title: titulo, description: descricao, type: tipo, priority: prioridade, date: data,
         category: categoria, time: horario, endTime: horarioFim, notes: notas,
         focusModeAllowed: focoPermitido, reminderMinutes, reminderCustom,
+        assignedTo: document.getElementById('act-assignee').value || a.assignedTo,
         subtasks: mesclarSubtarefas(a.subtasks, subtasksFinal)
       });
       salvarAtividades();
@@ -1404,6 +1428,8 @@ function salvarAtividadeDoFormulario(titulo) {
       endTime: horarioFim, category: categoria, priority: prioridade, type: tipo,
       reminderMinutes, reminderCustom, subtasks: subtasksFinal, notes: notas,
       focusModeAllowed: focoPermitido, completed: false, order: maiorOrdemDoDia(data) + 1,
+      assignedTo: document.getElementById('act-assignee').value || (window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined),
+      createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined,
       createdAt: Date.now()
     });
     salvarAtividades();
