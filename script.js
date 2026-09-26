@@ -542,7 +542,7 @@ function renderizarAgendaMembro() {
         <p class="settings-section-title">${rotulo}</p>
         ${itens.map((i) => `
           <div class="settings-row" style="align-items:center;">
-            <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${ICONE_TIPO[i.type] || ''} ${escapeHtml(i.title)}</span>
+            <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${ICONE_TIPO[i.type] || ''} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? '📋 ' : ''}${escapeHtml(i.title)}</span>
             <span style="font-size:13px;color:#8A8A8A;">${i.time || (i.completed ? '✓ Concluída' : '')}</span>
           </div>
         `).join('')}
@@ -657,8 +657,7 @@ function renderizarHoje() {
   const concluidasLista = itens.filter((i) => i.completed);
 
   const ulPend = document.getElementById('today-pending-list');
-  ulPend.innerHTML = '';
-  pendentes.forEach((i) => ulPend.appendChild(criarCartaoAtividade(i)));
+  renderizarListaComSeparador(ulPend, pendentes);
   document.getElementById('today-empty').classList.toggle('hidden', itens.length > 0);
 
   const ulDone = document.getElementById('today-done-list');
@@ -687,6 +686,26 @@ function nomeMembroPorId(id) {
   const membros = window.meuDiaMembros || [];
   const m = membros.find((x) => x.id === id);
   return m ? m.name : null;
+}
+
+// Renderiza uma lista de itens dentro de <ul>/<ol>, separando visualmente
+// o que a própria pessoa criou pra si mesma do que foi atribuído por
+// outra pessoa (ex: o gestor atribuiu pra um colaborador) — evita misturar
+// as duas coisas numa lista só, que gerava confusão.
+function renderizarListaComSeparador(ulElement, itens, onClickOverride) {
+  ulElement.innerHTML = '';
+  const minhas = itens.filter((i) => !i.createdBy || i.createdBy === i.assignedTo);
+  const atribuidas = itens.filter((i) => i.createdBy && i.createdBy !== i.assignedTo);
+
+  minhas.forEach((i) => ulElement.appendChild(criarCartaoAtividade(i, onClickOverride)));
+
+  if (atribuidas.length > 0) {
+    const divisor = document.createElement('li');
+    divisor.className = 'section-divider';
+    divisor.textContent = '📋 Atribuídas a você';
+    ulElement.appendChild(divisor);
+    atribuidas.forEach((i) => ulElement.appendChild(criarCartaoAtividade(i, onClickOverride)));
+  }
 }
 
 function criarCartaoAtividade(item, onClickOverride) {
@@ -829,8 +848,7 @@ function renderizarAmanha() {
   if (busca) itens = itens.filter((i) => i.title.toLowerCase().includes(busca));
 
   const ul = document.getElementById('tomorrow-list');
-  ul.innerHTML = '';
-  itens.forEach((i) => ul.appendChild(criarCartaoAtividade(i)));
+  renderizarListaComSeparador(ul, itens);
   document.getElementById('tomorrow-empty').classList.toggle('hidden', itens.length > 0);
 }
 
@@ -861,10 +879,7 @@ function renderizarPendentes() {
   banner.classList.toggle('hidden', listarPendentes().length === 0);
 
   const ul = document.getElementById('pending-list');
-  ul.innerHTML = '';
-  itens.forEach((i) => {
-    ul.appendChild(criarCartaoAtividade(i, abrirResolucaoPendencia));
-  });
+  renderizarListaComSeparador(ul, itens, abrirResolucaoPendencia);
   document.getElementById('pending-empty').classList.toggle('hidden', itens.length > 0);
 }
 
@@ -966,8 +981,7 @@ function renderizarCalendario() {
   if (filtroStatus === 'concluida') itensDia = itensDia.filter((i) => i.completed);
 
   const ulDia = document.getElementById('calendar-day-list');
-  ulDia.innerHTML = '';
-  itensDia.forEach((i) => ulDia.appendChild(criarCartaoAtividade(i)));
+  renderizarListaComSeparador(ulDia, itensDia);
 }
 
 function preencherFiltroCategoriasCalendario() {
