@@ -469,6 +469,7 @@ function renderizarTelaAtual(idTela) {
     case 'screen-categories': renderizarCategorias(); break;
     case 'screen-settings': renderizarConfiguracoes(); break;
     case 'screen-manager-approvals': if (window.renderizarAprovacoesPendentes) window.renderizarAprovacoesPendentes(); break;
+    case 'screen-team-tasks': if (window.renderizarTarefasEquipe) window.renderizarTarefasEquipe(); break;
   }
 }
 
