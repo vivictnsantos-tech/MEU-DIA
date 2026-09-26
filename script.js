@@ -288,7 +288,9 @@ function normalizarAtividade(a) {
     notes: a.notes || '',
     focusModeAllowed: !!a.focusModeAllowed,
     completed: !!a.completed,
-    order: a.order || 0
+    order: a.order || 0,
+    assignedTo: a.assignedTo,
+    createdBy: a.createdBy
   };
 }
 
@@ -317,7 +319,9 @@ function normalizarOcorrenciaRotina(r, dataStr, completionsFonte) {
     notes: r.notes || '',
     focusModeAllowed: !!r.focusModeAllowed,
     completed: !!comp.done,
-    order: 0
+    order: 0,
+    assignedTo: r.assignedTo,
+    createdBy: r.createdBy
   };
 }
 
@@ -679,6 +683,12 @@ const ICONE_TIPO = {
   tarefa: '✓', compromisso: '📌', reuniao: '👥', lembrete: '🔔', rotina: '🔁'
 };
 
+function nomeMembroPorId(id) {
+  const membros = window.meuDiaMembros || [];
+  const m = membros.find((x) => x.id === id);
+  return m ? m.name : null;
+}
+
 function criarCartaoAtividade(item, onClickOverride) {
   const li = document.createElement('li');
   li.className = `activity-card prio-${item.priority}${item.completed ? ' completed' : ''}`;
@@ -725,6 +735,17 @@ function criarCartaoAtividade(item, onClickOverride) {
     catEl.style.color = cat.color;
     catEl.textContent = cat.name;
     meta.appendChild(catEl);
+  }
+
+  // Sinaliza quando a atividade foi atribuída por outra pessoa (ex: o gestor
+  // atribuiu pra um colaborador) — não aparece em tarefas que a pessoa criou
+  // pra si mesma.
+  if (item.createdBy && item.assignedTo && item.createdBy !== item.assignedTo) {
+    const atribuidorEl = document.createElement('span');
+    atribuidorEl.className = 'ac-tag ac-tag-atribuida';
+    const nomeAtribuidor = nomeMembroPorId(item.createdBy);
+    atribuidorEl.textContent = nomeAtribuidor ? `📋 Atribuída por ${nomeAtribuidor}` : '📋 Atribuída pela gestão';
+    meta.appendChild(atribuidorEl);
   }
 
   body.appendChild(meta);
@@ -1342,7 +1363,10 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     // Nova atividade
     document.getElementById('act-date').value = dataPredefinida || hojeStr();
     document.getElementById('act-has-time').checked = false;
-    marcarResponsaveis(window.meuDiaPerfil ? [window.meuDiaPerfil.id] : []);
+    // Não pré-marca ninguém: o gestor escolhe explicitamente pra quem é a
+    // atividade (só ele mesmo, só um colaborador, ou os dois), pra evitar
+    // que uma tarefa atribuída a alguém entre sem querer na agenda pessoal dele.
+    marcarResponsaveis([]);
     configurarReminderUI(null, '');
   }
 
