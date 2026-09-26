@@ -46,6 +46,12 @@ function amanhaStr() {
   return formatarDataISO(d);
 }
 
+function rotuloDataCurta(dataStr) {
+  const d = new Date(dataStr + 'T00:00:00');
+  const dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+  return `${dias[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 function somarDias(dataStr, dias) {
   const d = new Date(dataStr + 'T00:00:00');
   d.setDate(d.getDate() + dias);
@@ -235,17 +241,22 @@ function rotinaOcorreEm(rotina, dataStr) {
 }
 
 // Retorna todas as ocorrências (atividades + rotinas) de uma data, já "achatadas"
-// em um formato comum usado pela interface.
-function ocorrenciasDoDia(dataStr) {
+// em um formato comum usado pela interface. Por padrão usa os dados da própria
+// pessoa (state); um gestor pode passar o "conjunto" de outra pessoa (ver
+// carregarAgendaDoMembro em auth.js) pra reaproveitar essa mesma lógica.
+function ocorrenciasDoDia(dataStr, conjunto) {
+  const atividadesFonte = conjunto ? conjunto.activities : state.activities;
+  const rotinasFonte = conjunto ? conjunto.routines : state.routines;
+  const completionsFonte = conjunto ? conjunto.completions : state.completions;
   const itens = [];
 
-  state.activities
+  atividadesFonte
     .filter((a) => a.date === dataStr)
     .forEach((a) => itens.push(normalizarAtividade(a)));
 
-  state.routines.forEach((r) => {
+  rotinasFonte.forEach((r) => {
     if (rotinaOcorreEm(r, dataStr)) {
-      itens.push(normalizarOcorrenciaRotina(r, dataStr));
+      itens.push(normalizarOcorrenciaRotina(r, dataStr, completionsFonte));
     }
   });
 
@@ -281,9 +292,10 @@ function normalizarAtividade(a) {
   };
 }
 
-function normalizarOcorrenciaRotina(r, dataStr) {
+function normalizarOcorrenciaRotina(r, dataStr, completionsFonte) {
+  const completions = completionsFonte || state.completions;
   const chave = r.id + '|' + dataStr;
-  const comp = state.completions[chave] || { done: false, subtasksDone: {} };
+  const comp = completions[chave] || { done: false, subtasksDone: {} };
   const subtasks = (r.subtasks || []).map((s) => ({
     id: s.id, text: s.text, done: !!comp.subtasksDone[s.id]
   }));
@@ -482,7 +494,61 @@ function renderizarTelaAtual(idTela) {
     case 'screen-settings': renderizarConfiguracoes(); break;
     case 'screen-manager-approvals': if (window.renderizarAprovacoesPendentes) window.renderizarAprovacoesPendentes(); break;
     case 'screen-team-tasks': if (window.renderizarTarefasEquipe) window.renderizarTarefasEquipe(); break;
+    case 'screen-member-agenda': renderizarAgendaMembro(); break;
   }
+}
+
+/* ================================================================
+   AGENDA COMPLETA DE UM COLABORADOR (visão do gestor, só leitura)
+   ================================================================ */
+
+// window.meuDiaAgendaMembroAtual = { id, name, conjunto: {activities, routines, completions} }
+// é preenchido pelo botão "Ver agenda completa" (configurarNavegacao) depois
+// de buscar os dados no servidor via window.carregarAgendaDoMembro (auth.js).
+function renderizarAgendaMembro() {
+  const cache = window.meuDiaAgendaMembroAtual;
+  const lista = document.getElementById('member-agenda-list');
+  const vazio = document.getElementById('member-agenda-empty');
+  const titulo = document.getElementById('member-agenda-title');
+  if (!lista || !vazio || !titulo) return;
+
+  if (!cache) {
+    lista.innerHTML = '';
+    vazio.textContent = 'Selecione um colaborador na tela anterior.';
+    vazio.classList.remove('hidden');
+    titulo.textContent = 'Agenda';
+    return;
+  }
+
+  titulo.textContent = `Agenda de ${cache.name}`;
+
+  const dias = [];
+  for (let i = 0; i < 14; i++) {
+    dias.push(somarDias(hojeStr(), i));
+  }
+
+  let temAlgumaCoisa = false;
+  const blocos = dias.map((dataStr, idx) => {
+    const itens = ocorrenciasDoDia(dataStr, cache.conjunto);
+    if (itens.length === 0) return '';
+    temAlgumaCoisa = true;
+    const rotulo = idx === 0 ? 'Hoje' : idx === 1 ? 'Amanhã' : rotuloDataCurta(dataStr);
+    return `
+      <div class="settings-section">
+        <p class="settings-section-title">${rotulo}</p>
+        ${itens.map((i) => `
+          <div class="settings-row" style="align-items:center;">
+            <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${ICONE_TIPO[i.type] || ''} ${escapeHtml(i.title)}</span>
+            <span style="font-size:13px;color:#8A8A8A;">${i.time || (i.completed ? '✓ Concluída' : '')}</span>
+          </div>
+        `).join('')}
+      </div>
+    `;
+  }).join('');
+
+  lista.innerHTML = blocos;
+  vazio.textContent = 'Nada agendado nos próximos 14 dias.';
+  vazio.classList.toggle('hidden', temAlgumaCoisa);
 }
 
 function configurarNavegacao() {
@@ -2184,6 +2250,26 @@ function inicializar() {
     abrirModalAtividade(null, null, dataPredefinida);
   });
   document.getElementById('btn-settings').addEventListener('click', () => irParaTela('screen-settings'));
+  const btnVerAgendaMembro = document.getElementById('btn-ver-agenda-membro');
+  if (btnVerAgendaMembro) {
+    btnVerAgendaMembro.addEventListener('click', async () => {
+      const select = document.getElementById('select-membro-agenda');
+      const id = select.value;
+      if (!id) return;
+      const nome = select.options[select.selectedIndex].textContent;
+      btnVerAgendaMembro.disabled = true;
+      btnVerAgendaMembro.textContent = 'Carregando...';
+      try {
+        const conjunto = window.carregarAgendaDoMembro ? await window.carregarAgendaDoMembro(id) : { activities: [], routines: [], completions: {} };
+        window.meuDiaAgendaMembroAtual = { id, name: nome, conjunto };
+        irParaTela('screen-member-agenda');
+      } catch (e) {
+        alert('Não foi possível carregar a agenda agora. Tente de novo em instantes.');
+      }
+      btnVerAgendaMembro.disabled = false;
+      btnVerAgendaMembro.textContent = 'Ver agenda completa';
+    });
+  }
   document.getElementById('btn-new-routine').addEventListener('click', () => {
     document.getElementById('form-activity').reset();
     abrirModalAtividade(null, null, hojeStr());
