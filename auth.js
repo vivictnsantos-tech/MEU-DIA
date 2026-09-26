@@ -77,6 +77,8 @@ async function verificarAprovacaoEProsseguir() {
   window.meuDiaPerfil = { ...perfil, id: usuario.id };
   const itemAprovacoes = document.getElementById('more-manager-approvals');
   if (itemAprovacoes) itemAprovacoes.classList.toggle('hidden', perfil.role !== 'manager');
+  const itemTarefasEquipe = document.getElementById('more-team-tasks');
+  if (itemTarefasEquipe) itemTarefasEquipe.classList.toggle('hidden', perfil.role !== 'manager');
 
   await sincronizarCategoriasDoServidor(perfil.company_id);
   await sincronizarAtividadesDoServidor();
@@ -154,9 +156,15 @@ function linhaParaAtividade(r) {
 }
 
 async function sincronizarAtividadesDoServidor() {
+  // A agenda pessoal (Hoje/Amanhã/Calendário) mostra só as atividades da PRÓPRIA pessoa,
+  // mesmo para o gestor — a visão de toda a equipe é uma tela separada (Aprovar colaboradores
+  // hoje; um painel de acompanhamento da equipe pode vir depois).
+  const meuId = window.meuDiaPerfil ? window.meuDiaPerfil.id : null;
+  if (!meuId) return;
   const { data, error } = await supabaseClient
     .from('activities')
     .select('*')
+    .eq('assigned_to', meuId)
     .order('date', { ascending: true });
   if (!error && data) {
     localStorage.setItem('meudia_activities', JSON.stringify(data.map(linhaParaAtividade)));
@@ -174,9 +182,9 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   }
 
   const idsLocais = atividadesLocais.map((a) => a.id);
-  // Só apaga no servidor as atividades que EU criei e que sumiram localmente
-  // (evita que a exclusão local de uma pessoa apague a atividade de outra por engano).
-  let query = supabaseClient.from('activities').delete().eq('created_by', meuId);
+  // Só apaga no servidor as atividades que EU criei E que são minhas mesmo (autoatribuídas)
+  // e que sumiram localmente — nunca mexe em tarefas que atribuí a outras pessoas.
+  let query = supabaseClient.from('activities').delete().eq('created_by', meuId).eq('assigned_to', meuId);
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
   await query;
 };
@@ -201,6 +209,66 @@ async function carregarMembrosDaEmpresa() {
     .order('name', { ascending: true });
 
   window.meuDiaMembros = (!error && data) ? data : [{ id: perfil.id, name: perfil.name }];
+}
+
+// -----------------------------------------------------------
+// Painel do gestor: tarefas atribuídas aos colaboradores
+// (separado da agenda pessoal dela — vem direto do servidor,
+// nunca do localStorage, que só guarda as tarefas da própria pessoa)
+// -----------------------------------------------------------
+window.renderizarTarefasEquipe = async function renderizarTarefasEquipe() {
+  const lista = document.getElementById('lista-tarefas-equipe');
+  const vazio = document.getElementById('tarefas-equipe-empty');
+  if (!lista || !window.meuDiaPerfil) return;
+  lista.innerHTML = '<p class="hint-text">Carregando...</p>';
+
+  const meuId = window.meuDiaPerfil.id;
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('id, title, date, status, assigned_to')
+    .neq('assigned_to', meuId)
+    .order('date', { ascending: true });
+
+  if (error) {
+    lista.innerHTML = '<p class="hint-text">Não foi possível carregar agora. Tente de novo em instantes.</p>';
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    lista.innerHTML = '';
+    vazio.classList.remove('hidden');
+    return;
+  }
+  vazio.classList.add('hidden');
+
+  const membros = window.meuDiaMembros || [];
+  const nomePorId = {};
+  membros.forEach((m) => { nomePorId[m.id] = m.name; });
+
+  // Agrupa por colaborador
+  const porPessoa = {};
+  data.forEach((t) => {
+    const nome = nomePorId[t.assigned_to] || 'Colaborador';
+    if (!porPessoa[nome]) porPessoa[nome] = [];
+    porPessoa[nome].push(t);
+  });
+
+  lista.innerHTML = Object.keys(porPessoa).sort().map((nome) => `
+    <div class="settings-section">
+      <p class="settings-section-title">👤 ${nome}</p>
+      ${porPessoa[nome].map((t) => `
+        <div class="settings-row" style="align-items:center;">
+          <span style="${t.status === 'concluida' ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${t.title}</span>
+          <span style="font-size:13px;color:#8A8A8A;">${t.status === 'concluida' ? '✓ Concluída' : dataCurtaSimples(t.date)}</span>
+        </div>
+      `).join('')}
+    </div>
+  `).join('');
+};
+
+function dataCurtaSimples(dataStr) {
+  const d = new Date(dataStr + 'T00:00:00');
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
 // -----------------------------------------------------------
