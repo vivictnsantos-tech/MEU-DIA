@@ -1067,21 +1067,30 @@ function preencherSelectCategorias() {
   select.value = atual;
 }
 
-// Só o gestor vê e escolhe o responsável; para o colaborador, fica sempre ele mesmo.
+// Só o gestor vê e escolhe o(s) responsável(is); para o colaborador, fica sempre ele mesmo.
 function preencherSelectResponsavel() {
   const linha = document.getElementById('act-assignee-row');
-  const select = document.getElementById('act-assignee');
+  const lista = document.getElementById('act-assignee-list');
   const membros = window.meuDiaMembros || [];
   const souGestor = window.meuDiaPerfil && window.meuDiaPerfil.role === 'manager';
 
   linha.classList.toggle('hidden', !souGestor);
-  select.innerHTML = '';
+  lista.innerHTML = '';
   membros.forEach((m) => {
-    const opt = document.createElement('option');
-    opt.value = m.id; opt.textContent = m.name;
-    select.appendChild(opt);
+    const label = document.createElement('label');
+    label.innerHTML = `<input type="checkbox" value="${m.id}"><span>${m.name}</span>`;
+    lista.appendChild(label);
   });
-  if (!souGestor && window.meuDiaPerfil) select.value = window.meuDiaPerfil.id;
+}
+
+function marcarResponsaveis(idsMarcados) {
+  document.querySelectorAll('#act-assignee-list input[type="checkbox"]').forEach((cb) => {
+    cb.checked = idsMarcados.includes(cb.value);
+  });
+}
+
+function responsaveisMarcados() {
+  return Array.from(document.querySelectorAll('#act-assignee-list input[type="checkbox"]:checked')).map((cb) => cb.value);
 }
 
 /* ================================================================
@@ -1246,7 +1255,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
       document.getElementById('act-has-time').checked = !!original.time;
       document.getElementById('act-notes').value = original.notes || '';
       document.getElementById('act-focus-mode').checked = !!original.focusModeAllowed;
-      document.getElementById('act-assignee').value = original.assignedTo || (window.meuDiaPerfil ? window.meuDiaPerfil.id : '');
+      marcarResponsaveis([original.assignedTo || (window.meuDiaPerfil ? window.meuDiaPerfil.id : '')]);
       subtarefasEmEdicao = (original.subtasks || []).map((s) => ({ id: s.id, text: s.text }));
       configurarReminderUI(original.reminderMinutes, original.reminderCustom);
     }
@@ -1254,7 +1263,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     // Nova atividade
     document.getElementById('act-date').value = dataPredefinida || hojeStr();
     document.getElementById('act-has-time').checked = false;
-    document.getElementById('act-assignee').value = window.meuDiaPerfil ? window.meuDiaPerfil.id : '';
+    marcarResponsaveis(window.meuDiaPerfil ? [window.meuDiaPerfil.id] : []);
     configurarReminderUI(null, '');
   }
 
@@ -1413,24 +1422,34 @@ function salvarAtividadeDoFormulario(titulo) {
   } else if (state.editingActivityId && !state.editingIsRoutine) {
     const a = state.activities.find((x) => x.id === state.editingActivityId);
     if (a) {
+      const responsaveisSelecionados = responsaveisMarcados();
       Object.assign(a, {
         title: titulo, description: descricao, type: tipo, priority: prioridade, date: data,
         category: categoria, time: horario, endTime: horarioFim, notes: notas,
         focusModeAllowed: focoPermitido, reminderMinutes, reminderCustom,
-        assignedTo: document.getElementById('act-assignee').value || a.assignedTo,
+        assignedTo: responsaveisSelecionados[0] || a.assignedTo,
         subtasks: mesclarSubtarefas(a.subtasks, subtasksFinal)
       });
       salvarAtividades();
     }
   } else {
-    state.activities.push({
-      id: gerarId('act'), title: titulo, description: descricao, date: data, time: horario,
-      endTime: horarioFim, category: categoria, priority: prioridade, type: tipo,
-      reminderMinutes, reminderCustom, subtasks: subtasksFinal, notes: notas,
-      focusModeAllowed: focoPermitido, completed: false, order: maiorOrdemDoDia(data) + 1,
-      assignedTo: document.getElementById('act-assignee').value || (window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined),
-      createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined,
-      createdAt: Date.now()
+    const responsaveisSelecionados = responsaveisMarcados();
+    const listaResponsaveis = responsaveisSelecionados.length > 0
+      ? responsaveisSelecionados
+      : [window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined];
+
+    // Uma cópia independente da atividade para cada responsável marcado
+    // (cada pessoa consegue concluir a dela sem afetar a dos colegas).
+    listaResponsaveis.forEach((idResponsavel) => {
+      state.activities.push({
+        id: gerarId('act'), title: titulo, description: descricao, date: data, time: horario,
+        endTime: horarioFim, category: categoria, priority: prioridade, type: tipo,
+        reminderMinutes, reminderCustom, subtasks: subtasksFinal.map((s) => ({ ...s })), notes: notas,
+        focusModeAllowed: focoPermitido, completed: false, order: maiorOrdemDoDia(data) + 1,
+        assignedTo: idResponsavel,
+        createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined,
+        createdAt: Date.now()
+      });
     });
     salvarAtividades();
   }
