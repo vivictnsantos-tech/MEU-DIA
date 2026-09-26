@@ -74,11 +74,13 @@ async function verificarAprovacaoEProsseguir() {
   }
 
   // Aprovado! Segue o fluxo normal do app (tela de boas-vindas / app principal).
-  window.meuDiaPerfil = perfil;
+  window.meuDiaPerfil = { ...perfil, id: usuario.id };
   const itemAprovacoes = document.getElementById('more-manager-approvals');
   if (itemAprovacoes) itemAprovacoes.classList.toggle('hidden', perfil.role !== 'manager');
 
   await sincronizarCategoriasDoServidor(perfil.company_id);
+  await sincronizarAtividadesDoServidor();
+  await carregarMembrosDaEmpresa();
 
   mostrarSomenteEsteScreen('screen-welcome');
   if (window.iniciarAppMeuDia) window.iniciarAppMeuDia();
@@ -111,6 +113,95 @@ window.sincronizarCategoriasNoServidor = async function sincronizarCategoriasNoS
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
   await query;
 };
+
+// -----------------------------------------------------------
+// Atividades: sincronização com o Supabase
+// -----------------------------------------------------------
+function atividadeParaLinha(a, companyId, meuId) {
+  return {
+    id: a.id,
+    company_id: companyId,
+    created_by: a.createdBy || meuId,
+    assigned_to: a.assignedTo || meuId,
+    title: a.title,
+    type: a.type || 'tarefa',
+    priority: a.priority || null,
+    category_id: a.category || null,
+    description: a.description || null,
+    notes: a.notes || null,
+    date: a.date,
+    time: a.time || null,
+    end_time: a.endTime || null,
+    subtasks: a.subtasks || [],
+    focus_enabled: !!a.focusModeAllowed,
+    status: a.completed ? 'concluida' : 'pendente',
+    completed_at: a.completed ? new Date().toISOString() : null,
+    extra: { order: a.order || 0, reminderMinutes: a.reminderMinutes || null, reminderCustom: a.reminderCustom || null }
+  };
+}
+
+function linhaParaAtividade(r) {
+  return {
+    id: r.id, title: r.title, description: r.description || '', date: r.date,
+    time: r.time || '', endTime: r.end_time || '', category: r.category_id || '',
+    priority: r.priority || 'media', type: r.type || 'tarefa',
+    reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
+    subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
+    completed: r.status === 'concluida', order: r.extra?.order || 0,
+    createdAt: new Date(r.created_at).getTime(),
+    assignedTo: r.assigned_to, createdBy: r.created_by
+  };
+}
+
+async function sincronizarAtividadesDoServidor() {
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('*')
+    .order('date', { ascending: true });
+  if (!error && data) {
+    localStorage.setItem('meudia_activities', JSON.stringify(data.map(linhaParaAtividade)));
+  }
+}
+
+window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoServidor(atividadesLocais) {
+  if (!window.meuDiaPerfil) return;
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
+
+  const linhas = atividadesLocais.map((a) => atividadeParaLinha(a, companyId, meuId));
+  if (linhas.length > 0) {
+    await supabaseClient.from('activities').upsert(linhas);
+  }
+
+  const idsLocais = atividadesLocais.map((a) => a.id);
+  // Só apaga no servidor as atividades que EU criei e que sumiram localmente
+  // (evita que a exclusão local de uma pessoa apague a atividade de outra por engano).
+  let query = supabaseClient.from('activities').delete().eq('created_by', meuId);
+  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
+  await query;
+};
+
+// -----------------------------------------------------------
+// Lista de colaboradores da empresa (para o gestor atribuir atividades)
+// -----------------------------------------------------------
+async function carregarMembrosDaEmpresa() {
+  const perfil = window.meuDiaPerfil;
+  if (!perfil) return;
+
+  if (perfil.role !== 'manager') {
+    window.meuDiaMembros = [{ id: perfil.id, name: perfil.name }];
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('id, name')
+    .eq('company_id', perfil.company_id)
+    .eq('approved', true)
+    .order('name', { ascending: true });
+
+  window.meuDiaMembros = (!error && data) ? data : [{ id: perfil.id, name: perfil.name }];
+}
 
 // -----------------------------------------------------------
 // Painel do gestor: aprovar colaboradores pendentes
