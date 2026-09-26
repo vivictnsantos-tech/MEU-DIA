@@ -366,7 +366,7 @@ window.renderizarTarefasEquipe = async function renderizarTarefasEquipe() {
   const meuId = window.meuDiaPerfil.id;
   const { data, error } = await supabaseClient
     .from('activities')
-    .select('id, title, date, status, assigned_to')
+    .select('id, title, date, status, assigned_to, created_by')
     .neq('assigned_to', meuId)
     .order('date', { ascending: true });
 
@@ -399,7 +399,9 @@ window.renderizarTarefasEquipe = async function renderizarTarefasEquipe() {
       <p class="settings-section-title">👤 ${nome}</p>
       ${porPessoa[nome].map((t) => `
         <div class="settings-row" style="align-items:center;">
-          <span style="${t.status === 'concluida' ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${t.title}</span>
+          <span style="${t.status === 'concluida' ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">
+            ${t.created_by === t.assigned_to ? '' : '📋 '}${t.title}
+          </span>
           <span style="font-size:13px;color:#8A8A8A;">${t.status === 'concluida' ? '✓ Concluída' : dataCurtaSimples(t.date)}</span>
         </div>
       `).join('')}
