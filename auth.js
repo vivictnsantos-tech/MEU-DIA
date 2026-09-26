@@ -82,9 +82,27 @@ async function verificarAprovacaoEProsseguir() {
 
   await sincronizarCategoriasDoServidor(perfil.company_id);
   await sincronizarAtividadesDoServidor();
+  await sincronizarRotinasDoServidor();
+  const rotinasLocais = JSON.parse(localStorage.getItem('meudia_routines') || '[]');
+  await sincronizarCompletionsDoServidor(rotinasLocais);
   await carregarMembrosDaEmpresa();
 
-  mostrarSomenteEsteScreen('screen-welcome');
+  // Se a pessoa já passou pela tela de boas-vindas antes (em qualquer sessão
+  // anterior), pula direto pro app — atualizar a página não deve "resetar"
+  // a tela pra ela ter que apertar Começar/Pular de novo.
+  let jaOnboarded = false;
+  try {
+    const settings = JSON.parse(localStorage.getItem('meudia_settings') || '{}');
+    jaOnboarded = !!settings.onboarded;
+  } catch (e) { /* ignora */ }
+
+  if (jaOnboarded) {
+    ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome']
+      .forEach((id) => document.getElementById(id).classList.add('hidden'));
+    document.getElementById('app').classList.remove('hidden');
+  } else {
+    mostrarSomenteEsteScreen('screen-welcome');
+  }
   if (window.iniciarAppMeuDia) window.iniciarAppMeuDia();
 }
 
@@ -187,6 +205,129 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   let query = supabaseClient.from('activities').delete().eq('created_by', meuId).eq('assigned_to', meuId);
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
   await query;
+};
+
+// -----------------------------------------------------------
+// Rotinas: sincronização com o Supabase.
+// Rotinas usam a MESMA tabela "activities" (type = 'rotina'), guardando
+// a regra de repetição inteira dentro da coluna jsonb "recurrence".
+// As conclusões dia a dia ficam em "activity_occurrences" (ver mais abaixo).
+// -----------------------------------------------------------
+function rotinaParaLinha(r, companyId, meuId) {
+  return {
+    id: r.id,
+    company_id: companyId,
+    created_by: r.createdBy || meuId,
+    assigned_to: r.assignedTo || meuId,
+    title: r.title,
+    type: 'rotina',
+    priority: r.priority || null,
+    category_id: r.category || null,
+    description: r.description || null,
+    notes: r.notes || null,
+    date: r.startDate,
+    time: r.time || null,
+    end_time: r.endTime || null,
+    subtasks: r.subtasks || [],
+    focus_enabled: !!r.focusModeAllowed,
+    status: 'pendente',
+    recurrence: {
+      recurrence: r.recurrence, days: r.days || [], interval: r.interval || null,
+      startDate: r.startDate, endDate: r.endDate || '', active: r.active !== false,
+      paused: !!r.paused, skipDates: r.skipDates || []
+    },
+    extra: { reminderMinutes: r.reminderMinutes || null, reminderCustom: r.reminderCustom || null }
+  };
+}
+
+function linhaParaRotina(r) {
+  const rec = r.recurrence || {};
+  return {
+    id: r.id, title: r.title, description: r.description || '',
+    time: r.time || '', endTime: r.end_time || '', category: r.category_id || '',
+    priority: r.priority || 'media', type: 'rotina',
+    reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
+    subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
+    recurrence: rec.recurrence || 'daily', days: rec.days || [], interval: rec.interval || null,
+    startDate: rec.startDate || r.date, endDate: rec.endDate || '',
+    active: rec.active !== false, paused: !!rec.paused, skipDates: rec.skipDates || [],
+    createdAt: new Date(r.created_at).getTime(),
+    assignedTo: r.assigned_to, createdBy: r.created_by
+  };
+}
+
+async function sincronizarRotinasDoServidor() {
+  const meuId = window.meuDiaPerfil ? window.meuDiaPerfil.id : null;
+  if (!meuId) return;
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('*')
+    .eq('type', 'rotina')
+    .eq('assigned_to', meuId);
+  if (!error && data) {
+    localStorage.setItem('meudia_routines', JSON.stringify(data.map(linhaParaRotina)));
+  }
+}
+
+window.sincronizarRotinasNoServidor = async function sincronizarRotinasNoServidor(rotinasLocais) {
+  if (!window.meuDiaPerfil) return;
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
+
+  const linhas = rotinasLocais.map((r) => rotinaParaLinha(r, companyId, meuId));
+  if (linhas.length > 0) {
+    await supabaseClient.from('activities').upsert(linhas);
+  }
+
+  const idsLocais = rotinasLocais.map((r) => r.id);
+  let query = supabaseClient.from('activities').delete()
+    .eq('type', 'rotina').eq('created_by', meuId).eq('assigned_to', meuId);
+  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
+  await query;
+};
+
+// -----------------------------------------------------------
+// Conclusões de ocorrências de rotina (uma linha por rotina + data)
+// -----------------------------------------------------------
+async function sincronizarCompletionsDoServidor(rotinasLocais) {
+  const idsRotinas = rotinasLocais.map((r) => r.id);
+  if (idsRotinas.length === 0) {
+    localStorage.setItem('meudia_completions', JSON.stringify({}));
+    return;
+  }
+  const { data, error } = await supabaseClient
+    .from('activity_occurrences')
+    .select('activity_id, occurrence_date, completed, subtasks_state')
+    .in('activity_id', idsRotinas);
+  if (!error && data) {
+    const completions = {};
+    data.forEach((o) => {
+      const chave = o.activity_id + '|' + o.occurrence_date;
+      completions[chave] = { done: !!o.completed, subtasksDone: o.subtasks_state || {} };
+    });
+    localStorage.setItem('meudia_completions', JSON.stringify(completions));
+  }
+}
+
+window.sincronizarCompletionsNoServidor = async function sincronizarCompletionsNoServidor(completionsLocais) {
+  if (!window.meuDiaPerfil) return;
+  const meuId = window.meuDiaPerfil.id;
+  const chaves = Object.keys(completionsLocais);
+  if (chaves.length === 0) return;
+
+  const linhas = chaves.map((chave) => {
+    const [activityId, occurrenceDate] = chave.split('|');
+    const comp = completionsLocais[chave];
+    return {
+      activity_id: activityId,
+      occurrence_date: occurrenceDate,
+      completed: !!comp.done,
+      completed_by: meuId,
+      completed_at: comp.done ? new Date().toISOString() : null,
+      subtasks_state: comp.subtasksDone || {}
+    };
+  });
+  await supabaseClient.from('activity_occurrences').upsert(linhas, { onConflict: 'activity_id,occurrence_date' });
 };
 
 // -----------------------------------------------------------
