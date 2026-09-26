@@ -4,7 +4,7 @@
    e por exibir notificações locais quando o navegador permitir.
    ============================================================ */
 
-const CACHE_NAME = 'meu-dia-cache-v9';
+const CACHE_NAME = 'meu-dia-cache-v10';
 const APP_SHELL = [
   './',
   './index.html',
