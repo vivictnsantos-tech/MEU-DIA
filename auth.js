@@ -634,14 +634,20 @@ document.getElementById('btn-signup-submit').addEventListener('click', async () 
     return;
   }
 
-  // 1. Verifica se o código da empresa existe
-  const { data: companyId, error: erroCodigo } = await supabaseClient
-    .rpc('company_id_from_code', { code: codigo });
+  // 1. Verifica se o código da empresa existe e se ainda tem vaga disponível
+  const { data: vagaData, error: erroCodigo } = await supabaseClient
+    .rpc('verificar_vaga_empresa', { code: codigo });
+  const vaga = vagaData && vagaData[0];
 
-  if (erroCodigo || !companyId) {
+  if (erroCodigo || !vaga || !vaga.company_id) {
     mostrarErro('auth-signup-error', 'Código da empresa inválido. Confira com seu gestor.');
     return;
   }
+  if (!vaga.tem_vaga) {
+    mostrarErro('auth-signup-error', 'Essa empresa já atingiu o limite de colaboradores no plano dela. Fale com seu gestor.');
+    return;
+  }
+  const companyId = vaga.company_id;
 
   // Guarda os dados do cadastro antes de criar o login — usado caso a confirmação
   // de e-mail interrompa o processo no meio (ver verificarAprovacaoEProsseguir).
