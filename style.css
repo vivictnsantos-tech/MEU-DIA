@@ -224,6 +224,35 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
   color: var(--branco);
 }
 
+.priority-chip-group { display: flex; gap: 8px; }
+.priority-chip {
+  flex: 1; text-align: center; padding: 10px 8px; border-radius: var(--raio-pequeno);
+  font-size: 12.5px; font-weight: 800; background: var(--input-bg); color: var(--text-muted);
+  cursor: pointer; border: 1.5px solid transparent;
+}
+.priority-chip.selected[data-value="alta"] { background: #FBE1DB; color: #C1543A; border-color: var(--coral); }
+.priority-chip.selected[data-value="media"] { background: #FBF0D9; color: #9A7419; border-color: #D9A441; }
+.priority-chip.selected[data-value="baixa"] { background: #E1EEE8; color: #3A6D5A; border-color: #4E8F7C; }
+:root[data-theme="dark"] .priority-chip { background: var(--input-bg); color: var(--text-muted); }
+
+.toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--input-bg); border-radius: var(--raio-pequeno); padding: 14px 16px; margin-bottom: 16px;
+}
+.toggle-row .tr-text { display: flex; flex-direction: column; gap: 2px; }
+.toggle-row .tr-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.toggle-row .tr-sub { font-size: 11.5px; color: var(--text-muted); }
+.switch { position: relative; width: 46px; height: 27px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+.switch-track { position: absolute; inset: 0; background: #D9CFBB; border-radius: 999px; cursor: pointer; transition: background .18s; }
+.switch-track::before {
+  content: ''; position: absolute; width: 21px; height: 21px; left: 3px; top: 3px; background: var(--branco);
+  border-radius: 50%; transition: transform .18s; box-shadow: 0 1px 3px rgba(0,0,0,.25);
+}
+.switch input:checked + .switch-track { background: var(--coral); }
+.switch input:checked + .switch-track::before { transform: translateX(19px); }
+:root[data-theme="dark"] .switch-track { background: #3A4F49; }
+
 /* ============================================================
    APP SHELL
    ============================================================ */
