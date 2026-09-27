@@ -186,7 +186,7 @@
     </div>
     <div class="app-header-actions">
       <button id="btn-header-add" class="btn btn-primary btn-header-add" type="button">＋ Nova atividade</button>
-      <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações">⚙️</button>
+      <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações"><img class="settings-icon settings-icon-btn" src="icons/menu/configuracoes.png" alt=""></button>
     </div>
   </header>
 
@@ -320,12 +320,12 @@
   <!-- ================= TELA: MAIS (menu) ================= -->
   <section id="screen-more" class="screen view" aria-label="Mais">
     <ul class="more-menu">
-      <li><button class="more-item" data-target="screen-focus-list">🎯 <span>Modo Foco</span></button></li>
-      <li><button class="more-item" data-target="screen-progress">📈 <span>Progresso</span></button></li>
-      <li><button class="more-item" data-target="screen-categories">🏷️ <span>Categorias</span></button></li>
-      <li><button class="more-item" id="more-settings">⚙️ <span>Configurações</span></button></li>
-      <li><button class="more-item hidden" id="more-manager-approvals" data-target="screen-manager-approvals">✅ <span>Aprovar colaboradores</span></button></li>
-      <li><button class="more-item hidden" id="more-team-tasks" data-target="screen-team-tasks">👥 <span>Tarefas atribuídas</span></button></li>
+      <li><button class="more-item" data-target="screen-focus-list"><img class="more-icon" src="icons/menu/modo_foco.png" alt=""> <span>Modo Foco</span></button></li>
+      <li><button class="more-item" data-target="screen-progress"><img class="more-icon" src="icons/menu/progresso.png" alt=""> <span>Progresso</span></button></li>
+      <li><button class="more-item" data-target="screen-categories"><img class="more-icon" src="icons/menu/categorias.png" alt=""> <span>Categorias</span></button></li>
+      <li><button class="more-item" id="more-settings"><img class="more-icon" src="icons/menu/configuracoes.png" alt=""> <span>Configurações</span></button></li>
+      <li><button class="more-item hidden" id="more-manager-approvals" data-target="screen-manager-approvals"><img class="more-icon" src="icons/menu/aprovacoes.png" alt=""> <span>Aprovar colaboradores</span></button></li>
+      <li><button class="more-item hidden" id="more-team-tasks" data-target="screen-team-tasks"><img class="more-icon" src="icons/menu/tarefas_da_equipe.png" alt=""> <span>Tarefas atribuídas</span></button></li>
     </ul>
   </section>
 
@@ -430,14 +430,14 @@
     <p class="hint-text">Deixe o app com a sua cara.</p>
 
     <div class="settings-section">
-      <p class="settings-section-title">👤 Seu nome</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/seu_nome.png" alt=""> Seu nome</p>
       <label class="field" style="padding-bottom:14px;">
         <input type="text" id="settings-name" maxlength="40" placeholder="Como podemos te chamar?">
       </label>
     </div>
 
     <div class="settings-section">
-      <p class="settings-section-title">☀️ Aparência</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/aparencia.png" alt=""> Aparência</p>
       <div class="settings-row">
         <span>Modo escuro</span>
         <label class="switch"><input type="checkbox" id="settings-dark"><span class="slider"></span></label>
@@ -452,7 +452,7 @@
     </div>
 
     <div class="settings-section">
-      <p class="settings-section-title">🔔 Notificações</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/notificacoes.png" alt=""> Notificações</p>
       <div class="settings-row">
         <span>Lembretes de tarefas</span>
         <label class="switch"><input type="checkbox" id="settings-notifications"><span class="slider"></span></label>
@@ -464,7 +464,7 @@
     </div>
 
     <div class="settings-section">
-      <p class="settings-section-title">🏷️ Categorias</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/categorias.png" alt=""> Categorias</p>
       <div class="settings-row linklike" id="settings-manage-categories">
         <span>Gerenciar categorias</span>
         <span>›</span>
@@ -472,7 +472,7 @@
     </div>
 
     <div class="settings-section">
-      <p class="settings-section-title">☁️ Backup e dados</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/backup_e_dados.png" alt=""> Backup e dados</p>
       <div class="settings-row linklike" id="btn-export">
         <span>Exportar dados (backup)</span>
         <span>›</span>
@@ -491,7 +491,7 @@
     </div>
 
     <div class="settings-section">
-      <p class="settings-section-title">🔑 Conta</p>
+      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/conta.png" alt=""> Conta</p>
       <div class="settings-row linklike" id="btn-logout" style="color:#B0392A;">
         <span>Sair</span>
         <span>›</span>
@@ -565,25 +565,26 @@
         <textarea id="act-description" rows="2" maxlength="300"></textarea>
       </label>
 
-      <div class="field-row">
-        <label class="field">
-          <span>Tipo</span>
-          <select id="act-type">
-            <option value="tarefa">Tarefa</option>
-            <option value="compromisso">Compromisso</option>
-            <option value="reuniao">Reunião</option>
-            <option value="lembrete">Lembrete</option>
-            <option value="rotina">Rotina</option>
-          </select>
-        </label>
-        <label class="field">
-          <span>Prioridade</span>
-          <select id="act-priority">
-            <option value="baixa">Baixa</option>
-            <option value="media" selected>Média</option>
-            <option value="alta">Alta</option>
-          </select>
-        </label>
+      <div class="field">
+        <span>Tipo</span>
+        <div class="chip-group" id="act-type-chips">
+          <button type="button" class="chip" data-value="tarefa">Tarefa</button>
+          <button type="button" class="chip" data-value="compromisso">Compromisso</button>
+          <button type="button" class="chip" data-value="reuniao">Reunião</button>
+          <button type="button" class="chip" data-value="lembrete">Lembrete</button>
+          <button type="button" class="chip" data-value="rotina">Rotina</button>
+        </div>
+        <input type="hidden" id="act-type" value="tarefa">
+      </div>
+
+      <div class="field">
+        <span>Prioridade</span>
+        <div class="priority-chip-group" id="act-priority-chips">
+          <button type="button" class="priority-chip" data-value="baixa">Baixa</button>
+          <button type="button" class="priority-chip" data-value="media">Média</button>
+          <button type="button" class="priority-chip" data-value="alta">Alta</button>
+        </div>
+        <input type="hidden" id="act-priority" value="media">
       </div>
 
       <div class="field-row">
@@ -675,10 +676,16 @@
         <textarea id="act-notes" rows="2" maxlength="300"></textarea>
       </label>
 
-      <label class="field field-inline">
-        <input type="checkbox" id="act-focus-mode">
-        <span>Permitir Modo Foco nesta atividade</span>
-      </label>
+      <div class="toggle-row">
+        <div class="tr-text">
+          <span class="tr-title">Permitir Modo Foco</span>
+          <span class="tr-sub">Libera essa atividade pra abrir no cronômetro de foco</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="act-focus-mode">
+          <span class="switch-track"></span>
+        </label>
+      </div>
 
       <div class="modal-actions">
         <button type="submit" class="btn btn-primary btn-block">Salvar atividade</button>
