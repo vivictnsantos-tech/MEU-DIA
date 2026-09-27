@@ -653,10 +653,15 @@ function renderizarAgendaMembro() {
             const naoFeitaEAtrasada = ehPassado && !i.completed;
             agendaMembroItensPorChave[i.id] = i;
             return `
-            <button type="button" class="settings-row settings-row-clickable" data-item-key="${escapeHtml(i.id)}">
-              <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : iconeTipoHtml(i.type)} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? svgAtribuidaInline() : ''}${escapeHtml(i.title)}</span>
-              <span style="font-size:13px;${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : 'color:#8A8A8A;'}">${naoFeitaEAtrasada ? 'Não concluída' : (i.time || (i.completed ? '✓ Concluída' : ''))}</span>
-            </button>
+            <div class="settings-row member-item-row">
+              <button type="button" class="member-item-edit" data-item-key="${escapeHtml(i.id)}">
+                <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : iconeTipoHtml(i.type)} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? svgAtribuidaInline() : ''}${escapeHtml(i.title)}</span>
+                <span style="font-size:13px;${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : 'color:#8A8A8A;'}">${naoFeitaEAtrasada ? 'Não concluída' : (i.time || (i.completed ? '✓ Concluída' : ''))}</span>
+              </button>
+              <button type="button" class="member-item-delete" data-item-key="${escapeHtml(i.id)}" aria-label="Excluir">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V4.5A1.5 1.5 0 0 1 10.5 3h3A1.5 1.5 0 0 1 15 4.5V7"/><path d="M6 7l1 13a2 2 0 0 0 2 1.9h6a2 2 0 0 0 2-1.9l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              </button>
+            </div>
           `;
           }).join('')}
         </div>
@@ -717,7 +722,14 @@ function configurarNavegacao() {
         if (seta) seta.textContent = body.classList.contains('hidden') ? '▸' : '▾';
         return;
       }
-      const linha = ev.target.closest('.settings-row-clickable');
+      const btnExcluir = ev.target.closest('.member-item-delete');
+      if (btnExcluir) {
+        const item = agendaMembroItensPorChave[btnExcluir.dataset.itemKey];
+        if (item) excluirItemMembroComConfirmacao(item);
+        return;
+      }
+
+      const linha = ev.target.closest('.member-item-edit');
       if (linha) {
         const item = agendaMembroItensPorChave[linha.dataset.itemKey];
         if (item) abrirEdicaoItemMembro(item);
@@ -735,6 +747,33 @@ function abrirEdicaoItemMembro(item) {
   if (!cache) return;
   const rotinaOriginal = item.isRoutine ? (cache.conjunto.routines || []).find((r) => r.id === item.routineId) : null;
   abrirModalAtividade(item, rotinaOriginal, null, { conjunto: cache.conjunto, membroId: cache.id });
+}
+
+// Exclui um item da agenda de um colaborador (ex: o gestor atribuiu pra
+// pessoa errada) — pede confirmação, apaga direto no servidor e some da
+// lista na hora, sem precisar recarregar a agenda inteira de novo.
+function excluirItemMembroComConfirmacao(item) {
+  const cache = window.meuDiaAgendaMembroAtual;
+  if (!cache) return;
+  const texto = item.isRoutine
+    ? `Excluir a rotina "${item.title}"? Isso apaga todas as ocorrências dela, passadas e futuras, da agenda de ${cache.name}.`
+    : `Excluir "${item.title}" da agenda de ${cache.name}?`;
+
+  abrirConfirmacao(texto, async () => {
+    const idReal = item.isRoutine ? item.routineId : item.id;
+    const resultado = window.excluirItemMembro ? await window.excluirItemMembro(idReal) : { ok: false };
+    if (!resultado || !resultado.ok) {
+      alert('Não foi possível excluir agora (sem internet ou instabilidade). Tente de novo em instantes.');
+      return;
+    }
+    if (item.isRoutine) {
+      cache.conjunto.routines = (cache.conjunto.routines || []).filter((r) => r.id !== idReal);
+    } else {
+      cache.conjunto.activities = (cache.conjunto.activities || []).filter((a) => a.id !== idReal);
+    }
+    renderizarAgendaMembro();
+    anunciarParaLeitorDeTela('Item excluído.');
+  });
 }
 
 function mostrarInfoCapacitor() {
