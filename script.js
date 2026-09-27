@@ -2570,13 +2570,16 @@ function inicializar() {
     state.hideDoneToday = !state.hideDoneToday;
     renderizarHoje();
   });
-  document.getElementById('fab-add').addEventListener('click', () => {
+  function abrirModalNovaAtividade() {
     const tela = telaAtivaId();
     const dataPredefinida = tela === 'screen-tomorrow' ? amanhaStr()
       : tela === 'screen-calendar' ? state.selectedCalendarDay
       : hojeStr();
     abrirModalAtividade(null, null, dataPredefinida);
-  });
+  }
+  document.getElementById('fab-add').addEventListener('click', abrirModalNovaAtividade);
+  const btnHeaderAdd = document.getElementById('btn-header-add');
+  if (btnHeaderAdd) btnHeaderAdd.addEventListener('click', abrirModalNovaAtividade);
   document.getElementById('btn-settings').addEventListener('click', () => irParaTela('screen-settings'));
   const btnVerAgendaMembro = document.getElementById('btn-ver-agenda-membro');
   if (btnVerAgendaMembro) {
