@@ -634,6 +634,24 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
   .field-row { gap: 16px; }
 }
 
+/* Telas bem largas (computador): o menu sai do rodapé e vira uma barra lateral fixa */
+@media (min-width: 900px) {
+  .bottom-nav {
+    position: fixed; top: 0; left: 0; right: auto; bottom: 0;
+    width: 220px; max-width: 220px; margin: 0;
+    flex-direction: column; align-items: stretch; justify-content: flex-start;
+    gap: 4px; padding: 28px 14px; padding-bottom: 28px;
+    border-top: none; border-right: 1px solid var(--border);
+  }
+  .nav-item {
+    flex-direction: row; justify-content: flex-start; gap: 12px;
+    padding: 11px 14px; font-size: 14px; border-radius: 12px;
+  }
+  .nav-item.active { background: var(--petroleo-light); }
+  .app { margin-left: 220px; margin-right: auto; max-width: 720px; }
+  .fab { right: 40px; bottom: 40px; }
+}
+
 /* Acessibilidade: foco visível */
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 3px solid var(--coral); outline-offset: 2px;
