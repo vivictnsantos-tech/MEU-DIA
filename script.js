@@ -574,12 +574,20 @@ function criarCartaoModoFoco(item) {
 // window.meuDiaAgendaMembroAtual = { id, name, conjunto: {activities, routines, completions} }
 // é preenchido pelo botão "Ver agenda completa" (configurarNavegacao) depois
 // de buscar os dados no servidor via window.carregarAgendaDoMembro (auth.js).
+// Guarda os itens normalizados (do renderizarAgendaMembro mais recente),
+// indexados pela mesma chave usada em data-item-key — assim o clique numa
+// linha acha de volta o item certo (com date/routineId corretos) sem ter
+// que recalcular tudo de novo.
+let agendaMembroItensPorChave = {};
+
 function renderizarAgendaMembro() {
   const cache = window.meuDiaAgendaMembroAtual;
   const lista = document.getElementById('member-agenda-list');
   const vazio = document.getElementById('member-agenda-empty');
   const titulo = document.getElementById('member-agenda-title');
   if (!lista || !vazio || !titulo) return;
+
+  agendaMembroItensPorChave = {};
 
   if (!cache) {
     lista.innerHTML = '';
@@ -643,11 +651,12 @@ function renderizarAgendaMembro() {
           <p class="settings-section-title">${rotulo}</p>
           ${itens.map((i) => {
             const naoFeitaEAtrasada = ehPassado && !i.completed;
+            agendaMembroItensPorChave[i.id] = i;
             return `
-            <div class="settings-row" style="align-items:center;">
+            <button type="button" class="settings-row settings-row-clickable" data-item-key="${escapeHtml(i.id)}">
               <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : iconeTipoHtml(i.type)} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? svgAtribuidaInline() : ''}${escapeHtml(i.title)}</span>
               <span style="font-size:13px;${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : 'color:#8A8A8A;'}">${naoFeitaEAtrasada ? 'Não concluída' : (i.time || (i.completed ? '✓ Concluída' : ''))}</span>
-            </div>
+            </button>
           `;
           }).join('')}
         </div>
@@ -700,14 +709,32 @@ function configurarNavegacao() {
   if (listaAgendaMembro) {
     listaAgendaMembro.addEventListener('click', (ev) => {
       const header = ev.target.closest('.month-header');
-      if (!header) return;
-      const body = header.nextElementSibling;
-      if (!body) return;
-      body.classList.toggle('hidden');
-      const seta = header.querySelector('.month-toggle');
-      if (seta) seta.textContent = body.classList.contains('hidden') ? '▸' : '▾';
+      if (header) {
+        const body = header.nextElementSibling;
+        if (!body) return;
+        body.classList.toggle('hidden');
+        const seta = header.querySelector('.month-toggle');
+        if (seta) seta.textContent = body.classList.contains('hidden') ? '▸' : '▾';
+        return;
+      }
+      const linha = ev.target.closest('.settings-row-clickable');
+      if (linha) {
+        const item = agendaMembroItensPorChave[linha.dataset.itemKey];
+        if (item) abrirEdicaoItemMembro(item);
+      }
     });
   }
+}
+
+// Abre o modal de edição pra um item que pertence à agenda de um
+// colaborador (visto pela tela "Agenda de [colaborador]" do gestor) — em
+// vez de editar direto o state pessoal de quem está logado, edita o
+// conjunto de dados desse colaborador e grava direto no servidor.
+function abrirEdicaoItemMembro(item) {
+  const cache = window.meuDiaAgendaMembroAtual;
+  if (!cache) return;
+  const rotinaOriginal = item.isRoutine ? (cache.conjunto.routines || []).find((r) => r.id === item.routineId) : null;
+  abrirModalAtividade(item, rotinaOriginal, null, { conjunto: cache.conjunto, membroId: cache.id });
 }
 
 function mostrarInfoCapacitor() {
@@ -1406,6 +1433,15 @@ function preencherSelectResponsavel() {
   const membros = window.meuDiaMembros || [];
   const souGestor = window.meuDiaPerfil && window.meuDiaPerfil.role === 'manager';
 
+  // Editando o item de um colaborador pela tela "Agenda de [colaborador]":
+  // mantém sempre atribuída a essa mesma pessoa, não faz sentido reatribuir
+  // por aqui (pra isso a gestora cria uma atividade nova).
+  if (contextoEdicaoMembro) {
+    linha.classList.add('hidden');
+    lista.innerHTML = '';
+    return;
+  }
+
   linha.classList.toggle('hidden', !souGestor);
   lista.innerHTML = '';
   membros.forEach((m) => {
@@ -1540,8 +1576,23 @@ let subtarefasEmEdicao = [];
 // checagem de choque de horário mesmo quando a pessoa não vê/mexe no
 // seletor de responsáveis (caso do colaborador comum).
 let atividadeEditandoAssignedTo = null;
+// Quando o gestor abre o modal a partir da tela "Agenda de [colaborador]",
+// guarda { conjunto, membroId } pra saber que o item original está no
+// conjunto de dados desse colaborador (não em state.activities/routines,
+// que são só a agenda pessoal de quem está logado) e que salvar precisa
+// gravar direto no servidor pra essa pessoa, sem misturar com o próprio state.
+let contextoEdicaoMembro = null;
 
-function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
+function fonteAtividadesEdicao() {
+  return contextoEdicaoMembro ? contextoEdicaoMembro.conjunto.activities : state.activities;
+}
+function fonteRotinasEdicao() {
+  return contextoEdicaoMembro ? contextoEdicaoMembro.conjunto.routines : state.routines;
+}
+
+function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida, membroContexto) {
+  contextoEdicaoMembro = membroContexto || null;
+
   const form = document.getElementById('form-activity');
   form.reset();
   document.getElementById('act-title-error').classList.add('hidden');
@@ -1553,7 +1604,10 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
   state.editingActivityId = null;
   state.editingIsRoutine = false;
 
-  document.getElementById('activity-modal-title').textContent = ehEdicao ? 'Editar atividade' : 'Nova atividade';
+  const nomeDonoContexto = contextoEdicaoMembro && window.meuDiaAgendaMembroAtual ? window.meuDiaAgendaMembroAtual.name : null;
+  document.getElementById('activity-modal-title').textContent = ehEdicao
+    ? (nomeDonoContexto ? `Editar atividade de ${nomeDonoContexto}` : 'Editar atividade')
+    : 'Nova atividade';
 
   atividadeEditandoAssignedTo = null;
 
@@ -1580,7 +1634,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     subtarefasEmEdicao = (rotinaOriginal.subtasks || []).map((s) => ({ id: s.id, text: s.text }));
     configurarReminderUI(rotinaOriginal.reminderMinutes, rotinaOriginal.reminderCustom);
   } else if (itemParaEditar && !itemParaEditar.isRoutine) {
-    const original = state.activities.find((a) => a.id === itemParaEditar.id);
+    const original = fonteAtividadesEdicao().find((a) => a.id === itemParaEditar.id);
     if (original) {
       state.editingActivityId = original.id;
       atividadeEditandoAssignedTo = original.assignedTo || null;
@@ -1618,7 +1672,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
 
 function objetoOriginalOuRotina(item, rotina) {
   if (rotina) return rotina;
-  if (item && !item.isRoutine) return state.activities.find((a) => a.id === item.id);
+  if (item && !item.isRoutine) return fonteAtividadesEdicao().find((a) => a.id === item.id);
   return null;
 }
 
@@ -1698,7 +1752,7 @@ function configurarFormAtividade() {
     if (inputs.length) inputs[inputs.length - 1].focus();
   });
 
-  document.getElementById('btn-close-activity').addEventListener('click', () => fecharModal('modal-activity'));
+  document.getElementById('btn-close-activity').addEventListener('click', () => { contextoEdicaoMembro = null; fecharModal('modal-activity'); });
 
   document.getElementById('form-activity').addEventListener('submit', (ev) => {
     ev.preventDefault();
@@ -1821,7 +1875,7 @@ async function salvarAtividadeDoFormulario(titulo) {
     const dataFim = document.getElementById('recurrence-end').value || '';
 
     if (state.editingIsRoutine && state.editingActivityId) {
-      const r = state.routines.find((x) => x.id === state.editingActivityId);
+      const r = fonteRotinasEdicao().find((x) => x.id === state.editingActivityId);
       if (r) {
         Object.assign(r, {
           title: titulo, description: descricao, priority: prioridade, category: categoria,
@@ -1831,6 +1885,12 @@ async function salvarAtividadeDoFormulario(titulo) {
           assignedTo: responsaveisSelecionados[0] || r.assignedTo,
           subtasks: mesclarSubtarefas(r.subtasks, subtasksFinal)
         });
+        // Editando a rotina de um colaborador (via "Agenda de X"): grava só
+        // esse item direto no servidor, sem mexer no state.routines de quem
+        // está logado (que é só a própria agenda pessoal).
+        resultadoSync = contextoEdicaoMembro && window.salvarEdicaoItemMembro
+          ? await window.salvarEdicaoItemMembro(r, true)
+          : await salvarRotinas();
       }
     } else {
       state.routines.push({
@@ -1843,10 +1903,10 @@ async function salvarAtividadeDoFormulario(titulo) {
         assignedTo: responsaveisSelecionados[0] || (window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined),
         createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined
       });
+      resultadoSync = await salvarRotinas();
     }
-    resultadoSync = await salvarRotinas();
   } else if (state.editingActivityId && !state.editingIsRoutine) {
-    const a = state.activities.find((x) => x.id === state.editingActivityId);
+    const a = fonteAtividadesEdicao().find((x) => x.id === state.editingActivityId);
     if (a) {
       Object.assign(a, {
         title: titulo, description: descricao, type: tipo, priority: prioridade, date: data,
@@ -1855,7 +1915,10 @@ async function salvarAtividadeDoFormulario(titulo) {
         assignedTo: responsaveisSelecionados[0] || a.assignedTo,
         subtasks: mesclarSubtarefas(a.subtasks, subtasksFinal)
       });
-      resultadoSync = await salvarAtividades();
+      // Idem pra atividade avulsa de um colaborador.
+      resultadoSync = contextoEdicaoMembro && window.salvarEdicaoItemMembro
+        ? await window.salvarEdicaoItemMembro(a, false)
+        : await salvarAtividades();
     }
   } else {
     const listaResponsaveis = responsaveisSelecionados.length > 0
@@ -1879,6 +1942,7 @@ async function salvarAtividadeDoFormulario(titulo) {
   }
 
   fecharModal('modal-activity');
+  contextoEdicaoMembro = null;
   renderizarTelaAtual(telaAtivaId());
   if (!resultadoSync || !resultadoSync.ok) {
     anunciarParaLeitorDeTela('Atividade salva neste aparelho, mas houve um problema ao enviar pro servidor.');
