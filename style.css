@@ -489,6 +489,8 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
 .nav-item.active { color: var(--coral); font-weight: 800; }
 .nav-icon { font-size: 20px; display: flex; }
 .nav-icon svg { display: block; }
+.nav-brand { display: none; }
+.btn-header-add { display: none; }
 
 /* ============================================================
    MODAIS
@@ -649,7 +651,18 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
   }
   .nav-item.active { background: var(--petroleo-light); }
   .app { margin-left: 220px; margin-right: auto; max-width: 720px; }
-  .fab { right: 40px; bottom: 40px; }
+  .fab { display: none; }
+
+  .nav-brand { display: flex; align-items: center; gap: 10px; padding: 4px 14px 22px; }
+  .nav-brand-icon { width: 28px; height: 28px; border-radius: 8px; }
+  .nav-brand-text { font-weight: 800; font-size: 15px; color: var(--text); }
+
+  .app-header-actions { display: flex; align-items: center; gap: 12px; }
+  .btn-header-add {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 18px; border-radius: var(--raio-pill); font-weight: 800; font-size: 14px;
+    background: var(--coral); color: var(--branco); border: none; cursor: pointer;
+  }
 }
 
 /* Acessibilidade: foco visível */
