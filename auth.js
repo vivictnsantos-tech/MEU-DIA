@@ -242,6 +242,19 @@ window.salvarEdicaoItemMembro = async function salvarEdicaoItemMembro(item, isRo
   return { ok: true };
 };
 
+// Exclui uma atividade avulsa ou rotina inteira de um colaborador, direto
+// pelo id da linha (mesma tabela "activities" de sempre) — usado quando o
+// gestor precisa apagar algo que atribuiu errado (pessoa errada, duplicado
+// etc.) pela tela "Agenda de [colaborador]".
+window.excluirItemMembro = async function excluirItemMembro(id) {
+  const { error } = await supabaseClient.from('activities').delete().eq('id', id);
+  if (error) {
+    console.error('Falha ao excluir item do colaborador:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+};
+
 // -----------------------------------------------------------
 // Rotinas: sincronização com o Supabase.
 // Rotinas usam a MESMA tabela "activities" (type = 'rotina'), guardando
