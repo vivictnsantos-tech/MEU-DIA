@@ -499,7 +499,56 @@ function renderizarTelaAtual(idTela) {
     case 'screen-manager-approvals': if (window.renderizarAprovacoesPendentes) window.renderizarAprovacoesPendentes(); break;
     case 'screen-team-tasks': if (window.renderizarTarefasEquipe) window.renderizarTarefasEquipe(); break;
     case 'screen-member-agenda': renderizarAgendaMembro(); break;
+    case 'screen-focus-list': renderizarListaModoFoco(); break;
   }
+}
+
+/* ================================================================
+   MODO FOCO — lista do dia (aba separada, pra não depender da hora
+   marcada na atividade, que agora serve só pra lembrete)
+   ================================================================ */
+
+function renderizarListaModoFoco() {
+  const lista = document.getElementById('lista-modo-foco');
+  const vazio = document.getElementById('modo-foco-empty');
+  if (!lista || !vazio) return;
+
+  const itens = ocorrenciasDoDia(hojeStr()).filter((i) => i.focusModeAllowed && !i.completed);
+  lista.innerHTML = '';
+  itens.forEach((i) => lista.appendChild(criarCartaoModoFoco(i)));
+  vazio.classList.toggle('hidden', itens.length > 0);
+}
+
+function criarCartaoModoFoco(item) {
+  const li = document.createElement('li');
+  li.className = 'activity-card';
+
+  const body = document.createElement('div');
+  body.className = 'ac-body';
+
+  const titulo = document.createElement('p');
+  titulo.className = 'ac-title';
+  titulo.textContent = item.title;
+  body.appendChild(titulo);
+
+  if (item.time) {
+    const meta = document.createElement('div');
+    meta.className = 'ac-meta';
+    const t = document.createElement('span');
+    t.className = 'ac-time';
+    t.textContent = 'Lembrete: ' + (item.endTime ? `${item.time} – ${item.endTime}` : item.time);
+    meta.appendChild(t);
+    body.appendChild(meta);
+  }
+
+  const focarBtn = document.createElement('button');
+  focarBtn.className = 'btn btn-primary btn-small';
+  focarBtn.textContent = '▶ Focar';
+  focarBtn.addEventListener('click', () => abrirModoFoco(item));
+
+  li.appendChild(body);
+  li.appendChild(focarBtn);
+  return li;
 }
 
 /* ================================================================
@@ -789,19 +838,8 @@ function criarCartaoAtividade(item, onClickOverride) {
   li.appendChild(check);
   li.appendChild(body);
 
-  // Atividades com horário de início e término definidos ganham um botão
-  // "Iniciar" que leva direto para a tela do cronômetro, sem precisar escolher tempo.
-  if (!item.completed && item.time && item.endTime) {
-    const startBtn = document.createElement('button');
-    startBtn.className = 'ac-start-btn';
-    startBtn.innerHTML = '▶ Iniciar';
-    startBtn.setAttribute('aria-label', 'Iniciar cronômetro desta atividade');
-    startBtn.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      abrirModoFoco(item, { iniciarDireto: true });
-    });
-    li.appendChild(startBtn);
-  }
+  // A hora de início/término da atividade serve só pra lembrete — não abre
+  // o Modo Foco sozinha. Pra focar em algo, a pessoa vai na aba Foco.
 
   li.appendChild(more);
 
@@ -1998,6 +2036,10 @@ let toastItemAtual = null;
 function mostrarToastLembrete(item) {
   toastItemAtual = item;
   document.getElementById('reminder-toast-title').textContent = `⏰ ${item.title}`;
+  // Só mostra o botão de iniciar o foco direto da notificação quando essa
+  // atividade tem o Modo Foco permitido — pra maioria dos lembretes (que são
+  // só avisos), esse botão nem aparece.
+  document.getElementById('reminder-toast-focus').classList.toggle('hidden', !item.focusModeAllowed);
   document.getElementById('reminder-toast').classList.remove('hidden');
 }
 
@@ -2006,7 +2048,8 @@ function configurarToastLembrete() {
     const acao = ev.target.dataset.action;
     if (!acao || !toastItemAtual) return;
     const item = toastItemAtual;
-    if (acao === 'complete') { marcarConcluido(item, true); renderizarTelaAtual(telaAtivaId()); }
+    if (acao === 'focus') { document.getElementById('reminder-toast').classList.add('hidden'); abrirModoFoco(item); return; }
+    else if (acao === 'complete') { marcarConcluido(item, true); renderizarTelaAtual(telaAtivaId()); }
     else if (acao === 'open') { abrirModalAtividade(item); }
     else if (acao === 'snooze5') adiarLembrete(item, 5);
     else if (acao === 'snooze10') adiarLembrete(item, 10);
