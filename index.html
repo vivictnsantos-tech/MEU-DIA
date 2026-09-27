@@ -32,7 +32,46 @@
     </label>
 
     <button id="btn-login-submit" class="btn btn-primary btn-block">Entrar</button>
+    <button id="btn-goto-forgot" class="settings-row linklike" type="button" style="justify-content:center;margin-top:12px;border-bottom:none;">Esqueci minha senha</button>
     <button id="btn-goto-signup" class="btn btn-secondary btn-block" type="button" style="margin-top:10px;">Criar minha conta</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     ESQUECI MINHA SENHA
+     ============================================================ -->
+<section id="screen-auth-forgot" class="screen screen-welcome hidden" aria-label="Esqueci minha senha">
+  <div class="welcome-card">
+    <button id="btn-back-forgot" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
+    <h1 style="font-size:22px;">Esqueci minha senha</h1>
+    <p class="hint-text">Digite o e-mail da sua conta. Vamos te mandar um link pra criar uma senha nova.</p>
+    <p id="auth-forgot-error" class="auth-error hidden"></p>
+    <p id="auth-forgot-success" class="auth-error hidden" style="background:var(--petroleo-light);color:var(--petroleo-dark);"></p>
+
+    <label class="field">
+      <span>E-mail</span>
+      <input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="username">
+    </label>
+
+    <button id="btn-forgot-submit" class="btn btn-primary btn-block" type="button">Enviar link</button>
+  </div>
+</section>
+
+<!-- ============================================================
+     CRIAR NOVA SENHA (depois de clicar no link do e-mail)
+     ============================================================ -->
+<section id="screen-auth-reset" class="screen screen-welcome hidden" aria-label="Criar nova senha">
+  <div class="welcome-card">
+    <h1 style="font-size:22px;">Criar nova senha</h1>
+    <p class="hint-text">Digite sua nova senha pra continuar usando o Meu Dia.</p>
+    <p id="auth-reset-error" class="auth-error hidden"></p>
+
+    <label class="field">
+      <span>Nova senha</span>
+      <input type="password" id="reset-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+    </label>
+
+    <button id="btn-reset-submit" class="btn btn-primary btn-block" type="button">Salvar nova senha</button>
   </div>
 </section>
 
