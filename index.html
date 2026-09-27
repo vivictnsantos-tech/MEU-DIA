@@ -184,7 +184,10 @@
       <p class="greeting" id="greeting-text">Olá</p>
       <p class="today-date" id="header-date"></p>
     </div>
-    <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações">⚙️</button>
+    <div class="app-header-actions">
+      <button id="btn-header-add" class="btn btn-primary btn-header-add" type="button">＋ Nova atividade</button>
+      <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações">⚙️</button>
+    </div>
   </header>
 
   <!-- ================= TELA: HOJE ================= -->
@@ -493,6 +496,10 @@
 
   <!-- Menu inferior -->
   <nav class="bottom-nav" aria-label="Navegação principal">
+    <div class="nav-brand">
+      <img src="icons/icon-192.png" alt="" class="nav-brand-icon">
+      <span class="nav-brand-text">Meu Dia</span>
+    </div>
     <button class="nav-item active" data-screen="screen-today">
       <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.3V21h5v-6h3v6h5V10.3"/></svg></span>
       <span>Hoje</span>
