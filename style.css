@@ -58,7 +58,8 @@
 :root[data-theme="dark"] .encouragement,
 :root[data-theme="dark"] .routine-icon,
 :root[data-theme="dark"] .settings-section-title,
-:root[data-theme="dark"] .settings-row.linklike {
+:root[data-theme="dark"] .settings-row.linklike,
+:root[data-theme="dark"] .month-header {
   color: #8FD9C7;
 }
 :root[data-theme="dark"] .welcome-card h1,
@@ -532,6 +533,18 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
   background: var(--surface); border-radius: var(--raio); padding: 6px 16px; margin-bottom: 14px; box-shadow: var(--sombra);
 }
 .settings-section-title { font-size: 13px; font-weight: 800; color: var(--petroleo-dark); padding: 14px 0 6px; display: flex; align-items: center; gap: 8px; }
+
+/* Agenda completa do colaborador: cabeçalho de mês clicável (abre/fecha) */
+.month-block { margin-bottom: 14px; }
+.month-header {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border: none; border-radius: var(--raio); box-shadow: var(--sombra);
+  padding: 14px 16px; font-size: 15px; font-weight: 800; color: var(--petroleo-dark);
+  cursor: pointer; text-align: left;
+}
+.month-toggle { font-size: 13px; color: var(--text-muted); }
+.month-body { padding-top: 8px; }
+.month-body.hidden { display: none; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 600; }
 .settings-row:last-child { border-bottom: none; }
 .settings-row.linklike { cursor: pointer; color: var(--petroleo-dark); }
@@ -564,7 +577,8 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
 .focus-time-choices { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-bottom: 12px; }
 .focus-time-choices .chip { border-color: rgba(255,255,255,0.3); color: var(--branco); background: rgba(255,255,255,0.08); }
 .focus-time-choices .chip.selected { background: var(--coral); border-color: var(--coral); }
-#focus-custom-minutes { margin: 6px 0 12px; text-align: center; padding: 11px; border-radius: var(--raio-pequeno); border: none; }
+#focus-custom-wrap { margin: 6px 0 12px; }
+#focus-custom-minutes, #focus-custom-seconds { text-align: center; padding: 11px; border-radius: var(--raio-pequeno); border: none; background: var(--surface); color: var(--text); }
 
 .focus-ring-wrap { position: relative; width: 220px; height: 220px; margin: 10px auto 22px; }
 .focus-ring-wrap svg { transform: rotate(-90deg); width: 220px; height: 220px; }
