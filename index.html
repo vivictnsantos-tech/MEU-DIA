@@ -192,37 +192,56 @@
 
   <!-- ================= TELA: HOJE ================= -->
   <section id="screen-today" class="screen view active" aria-label="Hoje">
-    <div id="next-appointment" class="next-appointment hidden"></div>
+    <div class="today-grid">
+      <div class="today-main">
+        <div id="next-appointment" class="next-appointment hidden"></div>
 
-    <div class="progress-block">
-      <div class="progress-block-header">
-        <span>Seu progresso hoje</span>
-        <strong id="today-progress-count">0 de 0</strong>
+        <div class="progress-block">
+          <div class="progress-block-header">
+            <span>Seu progresso hoje</span>
+            <strong id="today-progress-count">0 de 0</strong>
+          </div>
+          <div class="progress-bar-track">
+            <div id="today-progress-bar" class="progress-bar-fill"></div>
+          </div>
+          <p class="progress-label" id="today-progress-label">0 de 0 concluídas</p>
+        </div>
+
+        <div id="today-priorities" class="priorities-block hidden">
+          <h2 class="section-title">Prioridades de hoje</h2>
+          <div id="today-priorities-list" class="priority-list"></div>
+        </div>
+
+        <div class="list-toolbar">
+          <input type="search" id="today-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de hoje">
+          <button id="btn-toggle-done-today" class="btn btn-ghost btn-small">Ocultar concluídas</button>
+        </div>
+
+        <h2 class="section-title">Pendentes</h2>
+        <ul id="today-pending-list" class="activity-list"></ul>
+        <p id="today-empty" class="empty-state hidden">Nenhuma atividade por aqui. Que tal adicionar algo com o botão “+”?</p>
+
+        <h2 class="section-title">Concluídas</h2>
+        <ul id="today-done-list" class="activity-list"></ul>
+
+        <p class="quote-box"><span class="qb-icon">🌿</span><span id="today-quote">Disciplina de hoje, conquistas de amanhã.</span></p>
       </div>
-      <div class="progress-bar-track">
-        <div id="today-progress-bar" class="progress-bar-fill"></div>
-      </div>
-      <p class="progress-label" id="today-progress-label">0 de 0 concluídas</p>
+
+      <aside class="today-side">
+        <div class="side-card">
+          <div class="side-card-head">
+            <button id="mini-cal-prev" class="icon-btn icon-btn-small" type="button" aria-label="Mês anterior">‹</button>
+            <strong id="mini-cal-label"></strong>
+            <button id="mini-cal-next" class="icon-btn icon-btn-small" type="button" aria-label="Próximo mês">›</button>
+          </div>
+          <div id="mini-cal-grid" class="mini-cal-grid"></div>
+        </div>
+        <div class="side-card">
+          <h2 class="section-title" style="margin-top:0;">Próximas atividades</h2>
+          <div id="upcoming-list"></div>
+        </div>
+      </aside>
     </div>
-
-    <div id="today-priorities" class="priorities-block hidden">
-      <h2 class="section-title">Prioridades de hoje</h2>
-      <div id="today-priorities-list" class="priority-list"></div>
-    </div>
-
-    <div class="list-toolbar">
-      <input type="search" id="today-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de hoje">
-      <button id="btn-toggle-done-today" class="btn btn-ghost btn-small">Ocultar concluídas</button>
-    </div>
-
-    <h2 class="section-title">Pendentes</h2>
-    <ul id="today-pending-list" class="activity-list"></ul>
-    <p id="today-empty" class="empty-state hidden">Nenhuma atividade por aqui. Que tal adicionar algo com o botão “+”?</p>
-
-    <h2 class="section-title">Concluídas</h2>
-    <ul id="today-done-list" class="activity-list"></ul>
-
-    <p class="quote-box"><span class="qb-icon">🌿</span><span id="today-quote">Disciplina de hoje, conquistas de amanhã.</span></p>
   </section>
 
   <!-- ================= TELA: AMANHÃ ================= -->
