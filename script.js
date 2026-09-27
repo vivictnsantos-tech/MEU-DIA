@@ -2059,11 +2059,32 @@ function configurarToastLembrete() {
   });
 }
 
+// Celulares (principalmente iPhone) bloqueiam som criado fora de um toque
+// direto da pessoa na tela. Por isso criamos UM único AudioContext já na
+// primeira vez que a pessoa toca em qualquer lugar do app, e reaproveitamos
+// ele (com resume()) pra tocar os sons depois, mesmo quando o lembrete
+// dispara sozinho por um timer, sem toque nenhum naquele momento.
+let audioCtxCompartilhado = null;
+function obterAudioContextDestravado() {
+  if (!audioCtxCompartilhado) {
+    try {
+      audioCtxCompartilhado = new (window.AudioContext || window.webkitAudioContext)();
+    } catch (e) { return null; }
+  }
+  if (audioCtxCompartilhado.state === 'suspended') {
+    audioCtxCompartilhado.resume().catch(() => {});
+  }
+  return audioCtxCompartilhado;
+}
+document.addEventListener('click', obterAudioContextDestravado, { once: true, capture: true });
+document.addEventListener('touchstart', obterAudioContextDestravado, { once: true, capture: true });
+
 // Som do lembrete: um "dim-dom" de dois tons, mais forte e com uma
 // caída suave no final (em vez de um bipe único, baixo e seco).
 function tocarSom() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = obterAudioContextDestravado();
+    if (!ctx) return;
     [{ freq: 880, atraso: 0 }, { freq: 659, atraso: 0.16 }].forEach(({ freq, atraso }) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
@@ -2083,7 +2104,8 @@ function tocarSom() {
 // Som de "tempo esgotado" do Modo Foco: 3 bipes curtos e mais audíveis
 function tocarSomFimDoFoco() {
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const ctx = obterAudioContextDestravado();
+    if (!ctx) return;
     [0, 0.28, 0.56].forEach((atraso, i) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
