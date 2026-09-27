@@ -164,7 +164,7 @@ const state = {
   editingActivityId: null,
   editingIsRoutine: false,
   focusActivityRef: null, // {id, isRoutine, date}
-  focusTimer: { seconds: 0, total: 0, running: false, intervalId: null },
+  focusTimer: { seconds: 0, total: 0, running: false, intervalId: null, endsAt: null },
   itemActionsContext: null,
   confirmCallback: null
 };
@@ -1532,7 +1532,49 @@ function lerReminderDoFormulario() {
   return { reminderMinutes: Number(val), reminderCustom: '' };
 }
 
-function salvarAtividadeDoFormulario(titulo) {
+// Converte "HH:MM" em minutos desde a meia-noite, pra comparar horários.
+function horaParaMinutos(hhmm) {
+  const [h, m] = String(hhmm).split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+// Quando a atividade não tem horário de término definido, assumimos 30
+// minutos de duração só pra efeito de checar colisão de horário — não muda
+// o que fica salvo na atividade.
+function faixaMinutosAtividade(horario, horarioFim) {
+  const inicio = horaParaMinutos(horario);
+  const fim = horarioFim ? horaParaMinutos(horarioFim) : inicio + 30;
+  return [inicio, fim];
+}
+
+// Verifica se, ao atribuir esta atividade a alguém, ela colide com algum
+// compromisso que essa pessoa já tem na agenda (criado por ela mesma ou
+// atribuído por outra pessoa) naquele dia e horário. Só se aplica quando um
+// gestor está atribuindo a atividade a outra pessoa (não a ele mesmo).
+async function verificarColisaoAgenda(idResponsavel, dataStr, horario, horarioFim, idAtividadeAtual) {
+  if (!horario) return null;
+  if (!idResponsavel) return null;
+  if (window.meuDiaPerfil && idResponsavel === window.meuDiaPerfil.id) return null;
+  if (!window.carregarAgendaDoMembro) return null;
+
+  let conjunto;
+  try {
+    conjunto = await window.carregarAgendaDoMembro(idResponsavel);
+  } catch (e) { return null; }
+  if (!conjunto) return null;
+
+  const [inicioNovo, fimNovo] = faixaMinutosAtividade(horario, horarioFim);
+  const itensDoDia = ocorrenciasDoDia(dataStr, conjunto).filter((it) => it.time && it.id !== idAtividadeAtual);
+
+  for (const it of itensDoDia) {
+    const [inicioExistente, fimExistente] = faixaMinutosAtividade(it.time, it.endTime);
+    if (inicioNovo < fimExistente && inicioExistente < fimNovo) {
+      return it;
+    }
+  }
+  return null;
+}
+
+async function salvarAtividadeDoFormulario(titulo) {
   const descricao = document.getElementById('act-description').value.trim();
   const tipo = document.getElementById('act-type').value;
   const prioridade = document.getElementById('act-priority').value;
@@ -1547,6 +1589,28 @@ function salvarAtividadeDoFormulario(titulo) {
   const subtasksFinal = subtarefasEmEdicao.filter((s) => s.text.trim()).map((s) => ({ id: s.id, text: s.text.trim(), done: false }));
   const responsaveisSelecionados = responsaveisMarcados();
 
+  // Antes de salvar: se um horário foi definido e a atividade está sendo
+  // atribuída a outra(s) pessoa(s), checa se colide com algo que ela já tem
+  // marcado naquele dia. Se colidir, avisa o gestor e deixa ele decidir se
+  // quer salvar assim mesmo.
+  if (horario && responsaveisSelecionados.length > 0) {
+    for (const idResponsavel of responsaveisSelecionados) {
+      const conflito = await verificarColisaoAgenda(idResponsavel, data, horario, horarioFim, state.editingActivityId);
+      if (conflito) {
+        const nomePessoa = nomeMembroPorId(idResponsavel) || 'essa pessoa';
+        const horarioConflito = conflito.time + (conflito.endTime ? '–' + conflito.endTime : '');
+        abrirConfirmacao(
+          `${nomePessoa} já tem "${conflito.title}" às ${horarioConflito} nesse dia. Isso vai colidir com esse horário. Quer salvar assim mesmo?`,
+          () => efetivarSalvarAtividade()
+        );
+        return;
+      }
+    }
+  }
+
+  efetivarSalvarAtividade();
+
+  function efetivarSalvarAtividade() {
   if (recorrencia) {
     // Salva como ROTINA
     const diasSelecionados = Array.from(document.querySelectorAll('#recurrence-days .chip.selected')).map((c) => Number(c.dataset.day));
@@ -1614,6 +1678,7 @@ function salvarAtividadeDoFormulario(titulo) {
   fecharModal('modal-activity');
   renderizarTelaAtual(telaAtivaId());
   anunciarParaLeitorDeTela('Atividade salva.');
+  } // fim de efetivarSalvarAtividade
 }
 
 // Mantém o estado "done" das subtarefas já existentes ao editar
@@ -1857,13 +1922,41 @@ function abrirModoFoco(item, opcoes) {
 
 function pararTimerFoco() {
   if (state.focusTimer.intervalId) clearInterval(state.focusTimer.intervalId);
-  state.focusTimer = { seconds: 0, total: 0, running: false, intervalId: null };
+  liberarWakeLockFoco();
+  state.focusTimer = { seconds: 0, total: 0, running: false, intervalId: null, endsAt: null };
 }
+
+// Mantém a tela ligada durante o Modo Foco. Sem isso, o celular apaga a tela
+// e o navegador congela o cronômetro (e o som só "acorda" quando a pessoa
+// volta a tocar no aparelho) — pedir a tela ligada evita esse problema.
+let wakeLockFoco = null;
+async function solicitarWakeLockFoco() {
+  try {
+    if ('wakeLock' in navigator) {
+      wakeLockFoco = await navigator.wakeLock.request('screen');
+    }
+  } catch (e) { /* sem suporte ou permissão — segue sem travar a tela ligada */ }
+}
+function liberarWakeLockFoco() {
+  if (wakeLockFoco) {
+    try { wakeLockFoco.release(); } catch (e) { /* ignora */ }
+    wakeLockFoco = null;
+  }
+}
+// Se o navegador soltar a tela ligada sozinho (ex: a pessoa trocou de app e
+// voltou), pede de novo enquanto o Modo Foco ainda estiver rodando.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && state.focusTimer.running) {
+    solicitarWakeLockFoco();
+    tickTimerFoco(); // recalcula na hora, sem esperar o próximo segundo do timer
+  }
+});
 
 // Inicia a contagem regressiva do Modo Foco com o tempo já definido em state.focusTimer.total
 function iniciarContagemFoco() {
   if (!state.focusTimer.total) { alert('Escolha por quanto tempo você quer focar.'); return; }
   state.focusTimer.seconds = state.focusTimer.total;
+  state.focusTimer.endsAt = Date.now() + state.focusTimer.total * 1000;
   state.focusTimer.running = true;
   document.getElementById('focus-ring-wrap').classList.remove('hidden');
   document.getElementById('focus-time-choices').classList.add('hidden');
@@ -1873,6 +1966,7 @@ function iniciarContagemFoco() {
   document.getElementById('focus-stop').classList.remove('hidden');
   atualizarDisplayTimerFoco();
   state.focusTimer.intervalId = setInterval(tickTimerFoco, 1000);
+  solicitarWakeLockFoco();
 }
 
 function configurarModoFoco() {
@@ -1902,10 +1996,14 @@ function configurarModoFoco() {
     if (state.focusTimer.running) {
       clearInterval(state.focusTimer.intervalId);
       state.focusTimer.running = false;
+      state.focusTimer.endsAt = null;
+      liberarWakeLockFoco();
       document.getElementById('focus-pause').textContent = 'Retomar';
     } else {
       state.focusTimer.running = true;
+      state.focusTimer.endsAt = Date.now() + state.focusTimer.seconds * 1000;
       state.focusTimer.intervalId = setInterval(tickTimerFoco, 1000);
+      solicitarWakeLockFoco();
       document.getElementById('focus-pause').textContent = 'Pausar';
     }
   });
@@ -1939,11 +2037,18 @@ function sairDoModoFoco() {
 }
 
 function tickTimerFoco() {
-  state.focusTimer.seconds--;
+  if (!state.focusTimer.running) return;
+  // Calcula pelo horário final (endsAt), não por uma simples subtração —
+  // assim, se o navegador atrasar ou pausar o timer por um tempo (celular
+  // trocou de app, por exemplo), o cronômetro continua correto assim que
+  // voltar a rodar, em vez de ficar "devendo" segundos.
+  const restanteMs = state.focusTimer.endsAt - Date.now();
+  state.focusTimer.seconds = Math.max(0, Math.round(restanteMs / 1000));
   atualizarDisplayTimerFoco();
-  if (state.focusTimer.seconds <= 0) {
+  if (restanteMs <= 0) {
     clearInterval(state.focusTimer.intervalId);
     state.focusTimer.running = false;
+    liberarWakeLockFoco();
     if (state.settings.sounds) tocarSomFimDoFoco();
     if (navigator.vibrate) { try { navigator.vibrate([200, 100, 200]); } catch (e) { /* sem suporte */ } }
     document.getElementById('focus-ring-label').textContent = 'Tempo esgotado! 🎉';
