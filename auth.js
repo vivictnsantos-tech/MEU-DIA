@@ -224,6 +224,25 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
 };
 
 // -----------------------------------------------------------
+// Edição pelo gestor de uma atividade/rotina de um colaborador, feita a
+// partir da tela "Agenda de [colaborador]" — grava só esse item direto no
+// servidor (mesma linha/tabela de sempre), sem mexer no state.activities/
+// state.routines de quem está logado, que é só a agenda PESSOAL dele.
+// -----------------------------------------------------------
+window.salvarEdicaoItemMembro = async function salvarEdicaoItemMembro(item, isRoutine) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
+  const linha = isRoutine ? rotinaParaLinha(item, companyId, meuId) : atividadeParaLinha(item, companyId, meuId);
+  const { error } = await supabaseClient.from('activities').upsert(linha);
+  if (error) {
+    console.error('Falha ao salvar edição de item do colaborador:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+};
+
+// -----------------------------------------------------------
 // Rotinas: sincronização com o Supabase.
 // Rotinas usam a MESMA tabela "activities" (type = 'rotina'), guardando
 // a regra de repetição inteira dentro da coluna jsonb "recurrence".
