@@ -577,33 +577,94 @@ function renderizarAgendaMembro() {
 
   titulo.textContent = `Agenda de ${cache.name}`;
 
+  // Pra trás, mostra TODO o histórico da pessoa (desde a primeira atividade
+  // dela) — nada some com o tempo, nem quando o mês vira. Pra frente, cobre
+  // os próximos 12 meses. Em vez de uma lista enorme, agrupa por mês: o mês
+  // atual já vem aberto, os outros ficam "arquivados" (fechados) e a pessoa
+  // clica no cabeçalho do mês pra abrir.
+  const hoje = hojeStr();
+  const mesAtualChave = hoje.slice(0, 7);
+
+  const datasComOrigem = (cache.conjunto.activities || []).map((a) => a.date)
+    .concat((cache.conjunto.routines || []).map((r) => r.startDate))
+    .filter(Boolean);
+  let dataInicio = hoje;
+  datasComOrigem.forEach((d) => { if (d < dataInicio) dataInicio = d; });
+  const dataFim = somarDias(hoje, 365);
+
   const dias = [];
-  for (let i = 0; i < 14; i++) {
-    dias.push(somarDias(hojeStr(), i));
+  let cursor = dataInicio;
+  while (cursor <= dataFim) {
+    dias.push(cursor);
+    cursor = somarDias(cursor, 1);
   }
 
-  let temAlgumaCoisa = false;
-  const blocos = dias.map((dataStr, idx) => {
+  // Agrupa os dias com alguma coisa, mês a mês, mantendo a ordem cronológica.
+  const meses = []; // [{ chave: '2026-09', dias: [...] }]
+  const indicePorChave = {};
+  dias.forEach((dataStr) => {
     const itens = ocorrenciasDoDia(dataStr, cache.conjunto);
-    if (itens.length === 0) return '';
-    temAlgumaCoisa = true;
-    const rotulo = idx === 0 ? 'Hoje' : idx === 1 ? 'Amanhã' : rotuloDataCurta(dataStr);
+    if (itens.length === 0) return;
+    const chave = dataStr.slice(0, 7);
+    if (!(chave in indicePorChave)) {
+      indicePorChave[chave] = meses.length;
+      meses.push({ chave, dias: [] });
+    }
+    meses[indicePorChave[chave]].dias.push({ dataStr, itens });
+  });
+
+  const blocos = meses.map(({ chave, dias: diasDoMes }) => {
+    const aberto = chave === mesAtualChave;
+    const diasHtml = diasDoMes.map(({ dataStr, itens }) => {
+      const ehPassado = dataStr < hoje;
+      // Com 12 meses pra trás e pra frente, o mesmo dia/mês pode aparecer em
+      // anos diferentes — mostra o ano junto quando não for o ano atual.
+      const rotulo = dataStr === hoje ? 'Hoje'
+        : dataStr === amanhaStr() ? 'Amanhã'
+        : dataStr === somarDias(hoje, -1) ? 'Ontem'
+        : dataStr.slice(0, 4) === hoje.slice(0, 4) ? rotuloDataCurta(dataStr)
+        : `${rotuloDataCurta(dataStr)}/${dataStr.slice(0, 4)}`;
+      return `
+        <div class="settings-section">
+          <p class="settings-section-title">${rotulo}</p>
+          ${itens.map((i) => {
+            const naoFeitaEAtrasada = ehPassado && !i.completed;
+            return `
+            <div class="settings-row" style="align-items:center;">
+              <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : (ICONE_TIPO[i.type] || '')} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? '📋 ' : ''}${escapeHtml(i.title)}</span>
+              <span style="font-size:13px;${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : 'color:#8A8A8A;'}">${naoFeitaEAtrasada ? 'Não concluída' : (i.time || (i.completed ? '✓ Concluída' : ''))}</span>
+            </div>
+          `;
+          }).join('')}
+        </div>
+      `;
+    }).join('');
+
+    const totalItens = diasDoMes.reduce((soma, d) => soma + d.itens.length, 0);
+
     return `
-      <div class="settings-section">
-        <p class="settings-section-title">${rotulo}</p>
-        ${itens.map((i) => `
-          <div class="settings-row" style="align-items:center;">
-            <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">${ICONE_TIPO[i.type] || ''} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? '📋 ' : ''}${escapeHtml(i.title)}</span>
-            <span style="font-size:13px;color:#8A8A8A;">${i.time || (i.completed ? '✓ Concluída' : '')}</span>
-          </div>
-        `).join('')}
+      <div class="month-block">
+        <button type="button" class="month-header" data-month="${chave}">
+          <span>${nomeMesAno(chave)}</span>
+          <span style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:13px;color:#8A8A8A;font-weight:400;">${totalItens} ${totalItens === 1 ? 'item' : 'itens'}</span>
+            <span class="month-toggle">${aberto ? '▾' : '▸'}</span>
+          </span>
+        </button>
+        <div class="month-body${aberto ? '' : ' hidden'}">${diasHtml}</div>
       </div>
     `;
   }).join('');
 
   lista.innerHTML = blocos;
-  vazio.textContent = 'Nada agendado nos próximos 14 dias.';
-  vazio.classList.toggle('hidden', temAlgumaCoisa);
+  vazio.textContent = 'Nada agendado no histórico nem nos próximos 12 meses.';
+  vazio.classList.toggle('hidden', meses.length > 0);
+}
+
+const NOMES_MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+function nomeMesAno(chaveAnoMes) {
+  const [ano, mes] = chaveAnoMes.split('-').map(Number);
+  return `${NOMES_MESES[mes - 1]} de ${ano}`;
 }
 
 function configurarNavegacao() {
@@ -617,6 +678,22 @@ function configurarNavegacao() {
     btn.addEventListener('click', () => irParaTela(btn.dataset.back));
   });
   document.getElementById('more-settings').addEventListener('click', () => irParaTela('screen-settings'));
+
+  // Agenda completa do colaborador: clicar no cabeçalho de um mês abre/fecha
+  // ele (o conteúdo é recriado toda vez que a tela renderiza, então o clique
+  // fica escutando no container, que sempre existe).
+  const listaAgendaMembro = document.getElementById('member-agenda-list');
+  if (listaAgendaMembro) {
+    listaAgendaMembro.addEventListener('click', (ev) => {
+      const header = ev.target.closest('.month-header');
+      if (!header) return;
+      const body = header.nextElementSibling;
+      if (!body) return;
+      body.classList.toggle('hidden');
+      const seta = header.querySelector('.month-toggle');
+      if (seta) seta.textContent = body.classList.contains('hidden') ? '▸' : '▾';
+    });
+  }
 }
 
 function mostrarInfoCapacitor() {
@@ -1910,7 +1987,7 @@ function abrirModoFoco(item, opcoes) {
   });
 
   document.getElementById('focus-time-choices').classList.remove('hidden');
-  document.getElementById('focus-custom-minutes').classList.add('hidden');
+  document.getElementById('focus-custom-wrap').classList.add('hidden');
   document.getElementById('focus-ring-wrap').classList.add('hidden');
   document.getElementById('focus-start').classList.remove('hidden');
   document.getElementById('focus-pause').classList.add('hidden');
@@ -1935,7 +2012,7 @@ function abrirModoFoco(item, opcoes) {
     chip.addEventListener('click', () => {
       document.querySelectorAll('#focus-time-choices .chip').forEach((c) => c.classList.remove('selected'));
       chip.classList.add('selected');
-      document.getElementById('focus-custom-minutes').classList.add('hidden');
+      document.getElementById('focus-custom-wrap').classList.add('hidden');
       state.focusTimer.total = duracao * 60;
     });
     document.getElementById('focus-time-choices').prepend(chip);
@@ -1990,7 +2067,7 @@ function iniciarContagemFoco() {
   state.focusTimer.running = true;
   document.getElementById('focus-ring-wrap').classList.remove('hidden');
   document.getElementById('focus-time-choices').classList.add('hidden');
-  document.getElementById('focus-custom-minutes').classList.add('hidden');
+  document.getElementById('focus-custom-wrap').classList.add('hidden');
   document.getElementById('focus-start').classList.add('hidden');
   document.getElementById('focus-pause').classList.remove('hidden');
   document.getElementById('focus-stop').classList.remove('hidden');
@@ -2004,21 +2081,26 @@ function configurarModoFoco() {
     chip.addEventListener('click', () => {
       document.querySelectorAll('#focus-time-choices .chip').forEach((c) => c.classList.remove('selected'));
       chip.classList.add('selected');
-      const custom = document.getElementById('focus-custom-minutes');
+      const customWrap = document.getElementById('focus-custom-wrap');
       if (chip.dataset.minutes === 'custom') {
-        custom.classList.remove('hidden');
-        custom.focus();
-        state.focusTimer.total = 0;
+        customWrap.classList.remove('hidden');
+        document.getElementById('focus-custom-minutes').focus();
+        atualizarTotalFocoPersonalizado();
       } else {
-        custom.classList.add('hidden');
+        customWrap.classList.add('hidden');
         state.focusTimer.total = Number(chip.dataset.minutes) * 60;
       }
     });
   });
 
-  document.getElementById('focus-custom-minutes').addEventListener('input', (ev) => {
-    state.focusTimer.total = (Number(ev.target.value) || 0) * 60;
-  });
+  // Duração personalizada em minutos + segundos (ex: 0 min e 30 seg = 30s)
+  function atualizarTotalFocoPersonalizado() {
+    const min = Number(document.getElementById('focus-custom-minutes').value) || 0;
+    const seg = Number(document.getElementById('focus-custom-seconds').value) || 0;
+    state.focusTimer.total = (min * 60) + seg;
+  }
+  document.getElementById('focus-custom-minutes').addEventListener('input', atualizarTotalFocoPersonalizado);
+  document.getElementById('focus-custom-seconds').addEventListener('input', atualizarTotalFocoPersonalizado);
 
   document.getElementById('focus-start').addEventListener('click', iniciarContagemFoco);
 
