@@ -190,11 +190,13 @@ function carregarEstado() {
 
 function salvarAtividades() {
   salvar(CHAVES.activities, state.activities);
-  if (window.sincronizarAtividadesNoServidor) window.sincronizarAtividadesNoServidor(state.activities);
+  if (window.sincronizarAtividadesNoServidor) return window.sincronizarAtividadesNoServidor(state.activities);
+  return Promise.resolve({ ok: true });
 }
 function salvarRotinas() {
   salvar(CHAVES.routines, state.routines);
-  if (window.sincronizarRotinasNoServidor) window.sincronizarRotinasNoServidor(state.routines);
+  if (window.sincronizarRotinasNoServidor) return window.sincronizarRotinasNoServidor(state.routines);
+  return Promise.resolve({ ok: true });
 }
 function salvarCategorias() {
   salvar(CHAVES.categories, state.categories);
@@ -1356,6 +1358,10 @@ function calcularSequenciaDias() {
    ================================================================ */
 
 let subtarefasEmEdicao = [];
+// Guarda o "dono" (assignedTo) do item que está sendo editado, pra usar na
+// checagem de choque de horário mesmo quando a pessoa não vê/mexe no
+// seletor de responsáveis (caso do colaborador comum).
+let atividadeEditandoAssignedTo = null;
 
 function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
   const form = document.getElementById('form-activity');
@@ -1371,10 +1377,13 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
 
   document.getElementById('activity-modal-title').textContent = ehEdicao ? 'Editar atividade' : 'Nova atividade';
 
+  atividadeEditandoAssignedTo = null;
+
   if (rotinaOriginal) {
     // Editando uma rotina inteira
     state.editingActivityId = rotinaOriginal.id;
     state.editingIsRoutine = true;
+    atividadeEditandoAssignedTo = rotinaOriginal.assignedTo || null;
     document.getElementById('act-title').value = rotinaOriginal.title;
     document.getElementById('act-description').value = rotinaOriginal.description || '';
     document.getElementById('act-type').value = 'rotina';
@@ -1396,6 +1405,7 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida) {
     const original = state.activities.find((a) => a.id === itemParaEditar.id);
     if (original) {
       state.editingActivityId = original.id;
+      atividadeEditandoAssignedTo = original.assignedTo || null;
       document.getElementById('act-title').value = original.title;
       document.getElementById('act-description').value = original.description || '';
       document.getElementById('act-type').value = original.type || 'tarefa';
@@ -1546,25 +1556,31 @@ function faixaMinutosAtividade(horario, horarioFim) {
   return [inicio, fim];
 }
 
-// Verifica se, ao atribuir esta atividade a alguém, ela colide com algum
-// compromisso que essa pessoa já tem na agenda (criado por ela mesma ou
-// atribuído por outra pessoa) naquele dia e horário. Só se aplica quando um
-// gestor está atribuindo a atividade a outra pessoa (não a ele mesmo).
-async function verificarColisaoAgenda(idResponsavel, dataStr, horario, horarioFim, idAtividadeAtual) {
-  if (!horario) return null;
-  if (!idResponsavel) return null;
-  if (window.meuDiaPerfil && idResponsavel === window.meuDiaPerfil.id) return null;
-  if (!window.carregarAgendaDoMembro) return null;
+// Verifica se, ao salvar esta atividade com horário pra uma pessoa, ela
+// colide com algo que essa pessoa já tem marcado naquele dia — não importa
+// se foi ela mesma que criou o outro compromisso ou se foi atribuído por
+// outra pessoa (ex: a gestão). Funciona nos dois sentidos:
+// - gestão atribuindo pra um colaborador → busca a agenda completa dele no servidor;
+// - a própria pessoa criando algo pra si → usa a agenda que já está carregada localmente.
+async function encontrarConflitoDeHorario(idResponsavel, dataStr, horario, horarioFim, idAtividadeAtual) {
+  if (!horario || !idResponsavel) return null;
 
-  let conjunto;
-  try {
-    conjunto = await window.carregarAgendaDoMembro(idResponsavel);
-  } catch (e) { return null; }
-  if (!conjunto) return null;
+  const souEuMesmo = window.meuDiaPerfil && idResponsavel === window.meuDiaPerfil.id;
+  let itensDoDia;
+
+  if (souEuMesmo) {
+    itensDoDia = ocorrenciasDoDia(dataStr).filter((it) => it.time && it.id !== idAtividadeAtual);
+  } else {
+    if (!window.carregarAgendaDoMembro) return null;
+    let conjunto;
+    try {
+      conjunto = await window.carregarAgendaDoMembro(idResponsavel);
+    } catch (e) { return null; }
+    if (!conjunto) return null;
+    itensDoDia = ocorrenciasDoDia(dataStr, conjunto).filter((it) => it.time && it.id !== idAtividadeAtual);
+  }
 
   const [inicioNovo, fimNovo] = faixaMinutosAtividade(horario, horarioFim);
-  const itensDoDia = ocorrenciasDoDia(dataStr, conjunto).filter((it) => it.time && it.id !== idAtividadeAtual);
-
   for (const it of itensDoDia) {
     const [inicioExistente, fimExistente] = faixaMinutosAtividade(it.time, it.endTime);
     if (inicioNovo < fimExistente && inicioExistente < fimNovo) {
@@ -1589,15 +1605,23 @@ async function salvarAtividadeDoFormulario(titulo) {
   const subtasksFinal = subtarefasEmEdicao.filter((s) => s.text.trim()).map((s) => ({ id: s.id, text: s.text.trim(), done: false }));
   const responsaveisSelecionados = responsaveisMarcados();
 
-  // Antes de salvar: se um horário foi definido e a atividade está sendo
-  // atribuída a outra(s) pessoa(s), checa se colide com algo que ela já tem
-  // marcado naquele dia. Se colidir, avisa o gestor e deixa ele decidir se
-  // quer salvar assim mesmo.
-  if (horario && responsaveisSelecionados.length > 0) {
-    for (const idResponsavel of responsaveisSelecionados) {
-      const conflito = await verificarColisaoAgenda(idResponsavel, data, horario, horarioFim, state.editingActivityId);
+  // Antes de salvar: se um horário foi definido, checa se colide com algo que
+  // a pessoa responsável já tem marcado naquele dia — vale tanto quando a
+  // gestão está atribuindo a um colaborador quanto quando a própria pessoa
+  // (colaborador ou gestora) está criando algo pra si mesma num horário que
+  // já está ocupado por algo que a gestão colocou (ou por outra coisa dela).
+  // Não roda quando é uma rotina/recorrência (o horário se repete em vários
+  // dias diferentes, então o choque teria que ser checado dia a dia).
+  if (horario && !recorrencia) {
+    const listaParaChecar = responsaveisSelecionados.length > 0
+      ? responsaveisSelecionados
+      : [atividadeEditandoAssignedTo || (window.meuDiaPerfil ? window.meuDiaPerfil.id : null)];
+
+    for (const idResponsavel of listaParaChecar) {
+      const conflito = await encontrarConflitoDeHorario(idResponsavel, data, horario, horarioFim, state.editingActivityId);
       if (conflito) {
-        const nomePessoa = nomeMembroPorId(idResponsavel) || 'essa pessoa';
+        const souEuMesmo = window.meuDiaPerfil && idResponsavel === window.meuDiaPerfil.id;
+        const nomePessoa = souEuMesmo ? 'Você' : (nomeMembroPorId(idResponsavel) || 'Essa pessoa');
         const horarioConflito = conflito.time + (conflito.endTime ? '–' + conflito.endTime : '');
         abrirConfirmacao(
           `${nomePessoa} já tem "${conflito.title}" às ${horarioConflito} nesse dia. Isso vai colidir com esse horário. Quer salvar assim mesmo?`,
@@ -1608,9 +1632,10 @@ async function salvarAtividadeDoFormulario(titulo) {
     }
   }
 
-  efetivarSalvarAtividade();
+  await efetivarSalvarAtividade();
 
-  function efetivarSalvarAtividade() {
+  async function efetivarSalvarAtividade() {
+  let resultadoSync = { ok: true };
   if (recorrencia) {
     // Salva como ROTINA
     const diasSelecionados = Array.from(document.querySelectorAll('#recurrence-days .chip.selected')).map((c) => Number(c.dataset.day));
@@ -1641,7 +1666,7 @@ async function salvarAtividadeDoFormulario(titulo) {
         createdBy: window.meuDiaPerfil ? window.meuDiaPerfil.id : undefined
       });
     }
-    salvarRotinas();
+    resultadoSync = await salvarRotinas();
   } else if (state.editingActivityId && !state.editingIsRoutine) {
     const a = state.activities.find((x) => x.id === state.editingActivityId);
     if (a) {
@@ -1652,7 +1677,7 @@ async function salvarAtividadeDoFormulario(titulo) {
         assignedTo: responsaveisSelecionados[0] || a.assignedTo,
         subtasks: mesclarSubtarefas(a.subtasks, subtasksFinal)
       });
-      salvarAtividades();
+      resultadoSync = await salvarAtividades();
     }
   } else {
     const listaResponsaveis = responsaveisSelecionados.length > 0
@@ -1672,12 +1697,17 @@ async function salvarAtividadeDoFormulario(titulo) {
         createdAt: Date.now()
       });
     });
-    salvarAtividades();
+    resultadoSync = await salvarAtividades();
   }
 
   fecharModal('modal-activity');
   renderizarTelaAtual(telaAtivaId());
-  anunciarParaLeitorDeTela('Atividade salva.');
+  if (!resultadoSync || !resultadoSync.ok) {
+    anunciarParaLeitorDeTela('Atividade salva neste aparelho, mas houve um problema ao enviar pro servidor.');
+    alert('A atividade foi salva neste aparelho, mas não foi possível enviar pro servidor agora (sem internet ou instabilidade). Ela deve sincronizar sozinha na próxima vez que o app conseguir se conectar — se não sincronizar, tente abrir o app de novo com internet.');
+  } else {
+    anunciarParaLeitorDeTela('Atividade salva.');
+  }
   } // fim de efetivarSalvarAtividade
 }
 
