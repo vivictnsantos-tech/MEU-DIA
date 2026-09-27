@@ -1629,6 +1629,23 @@ function fonteRotinasEdicao() {
   return contextoEdicaoMembro ? contextoEdicaoMembro.conjunto.routines : state.routines;
 }
 
+// Tipo e prioridade viraram chips (toque) em vez de menu suspenso — os
+// dois <input type="hidden"> (#act-type e #act-priority) continuam sendo
+// a fonte de verdade pro resto do código, essas funções só mantêm o chip
+// certo destacado visualmente conforme o valor deles.
+function sincronizarChipsTipo() {
+  const atual = document.getElementById('act-type').value;
+  document.querySelectorAll('#act-type-chips .chip').forEach((c) => {
+    c.classList.toggle('selected', c.dataset.value === atual);
+  });
+}
+function sincronizarChipsPrioridade() {
+  const atual = document.getElementById('act-priority').value;
+  document.querySelectorAll('#act-priority-chips .priority-chip').forEach((c) => {
+    c.classList.toggle('selected', c.dataset.value === atual);
+  });
+}
+
 function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida, membroContexto) {
   contextoEdicaoMembro = membroContexto || null;
 
@@ -1705,6 +1722,8 @@ function abrirModalAtividade(itemParaEditar, rotinaOriginal, dataPredefinida, me
 
   renderizarSubtarefasEdicao();
   atualizarVisibilidadeCamposConforme();
+  sincronizarChipsTipo();
+  sincronizarChipsPrioridade();
   abrirModal('modal-activity');
   document.getElementById('act-title').focus();
 }
@@ -1792,6 +1811,19 @@ function configurarFormAtividade() {
   });
 
   document.getElementById('btn-close-activity').addEventListener('click', () => { contextoEdicaoMembro = null; fecharModal('modal-activity'); });
+
+  document.getElementById('act-type-chips').addEventListener('click', (ev) => {
+    const chip = ev.target.closest('.chip');
+    if (!chip) return;
+    document.getElementById('act-type').value = chip.dataset.value;
+    sincronizarChipsTipo();
+  });
+  document.getElementById('act-priority-chips').addEventListener('click', (ev) => {
+    const chip = ev.target.closest('.priority-chip');
+    if (!chip) return;
+    document.getElementById('act-priority').value = chip.dataset.value;
+    sincronizarChipsPrioridade();
+  });
 
   document.getElementById('form-activity').addEventListener('submit', (ev) => {
     ev.preventDefault();
