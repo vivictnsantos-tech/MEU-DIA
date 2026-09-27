@@ -482,7 +482,9 @@ function irParaTela(idTela) {
 
   const principais = ['screen-today', 'screen-tomorrow', 'screen-calendar', 'screen-routines', 'screen-more'];
   const fab = document.getElementById('fab-add');
-  fab.style.display = principais.includes(idTela) && idTela !== 'screen-more' ? 'flex' : 'none';
+  const ehTelaComFab = principais.includes(idTela) && idTela !== 'screen-more';
+  const ehComputador = window.matchMedia('(min-width: 900px)').matches;
+  fab.style.display = ehTelaComFab && !ehComputador ? 'flex' : 'none';
 
   renderizarTelaAtual(idTela);
   window.scrollTo(0, 0);
