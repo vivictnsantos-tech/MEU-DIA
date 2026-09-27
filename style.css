@@ -34,12 +34,12 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: #10201D;
-  --surface: #172925;
-  --text: #EEF3F0;
-  --text-muted: #9AB0A9;
-  --border: #24382F;
-  --petroleo-light: #1E3530;
+  --bg: #1B3831;
+  --surface: #234A41;
+  --text: #F2F7F4;
+  --text-muted: #9DBBB0;
+  --border: #2E594E;
+  --petroleo-light: #22483F;
   --coral-light: #3A2A24;
 }
 
@@ -486,8 +486,9 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
   background: none; border: none; display: flex; flex-direction: column; align-items: center; gap: 3px;
   font-size: 11px; font-weight: 600; color: var(--text-muted); cursor: pointer; padding: 4px 10px; border-radius: 12px;
 }
-.nav-item.active { color: var(--petroleo); font-weight: 800; }
-.nav-icon { font-size: 20px; }
+.nav-item.active { color: var(--coral); font-weight: 800; }
+.nav-icon { font-size: 20px; display: flex; }
+.nav-icon svg { display: block; }
 
 /* ============================================================
    MODAIS
