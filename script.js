@@ -247,10 +247,22 @@ function rotinaOcorreEm(rotina, dataStr) {
 // pessoa (state); um gestor pode passar o "conjunto" de outra pessoa (ver
 // carregarAgendaDoMembro em auth.js) pra reaproveitar essa mesma lógica.
 function ocorrenciasDoDia(dataStr, conjunto) {
-  const atividadesFonte = conjunto ? conjunto.activities : state.activities;
-  const rotinasFonte = conjunto ? conjunto.routines : state.routines;
+  let atividadesFonte = conjunto ? conjunto.activities : state.activities;
+  let rotinasFonte = conjunto ? conjunto.routines : state.routines;
   const completionsFonte = conjunto ? conjunto.completions : state.completions;
   const itens = [];
+
+  // Na própria tela da pessoa (sem "conjunto" de outro colaborador), o
+  // state.activities/state.routines guarda tudo que essa conta já criou —
+  // inclusive o que ela atribuiu para um colaborador, que fica salvo aqui
+  // localmente também. Sem esse filtro, isso reaparecia na agenda pessoal
+  // de quem atribuiu (ex: a gestora via de novo, na tela dela, o que só
+  // era pra aparecer na agenda do colaborador) — mantém só o que é dela.
+  if (!conjunto && window.meuDiaPerfil) {
+    const meuId = window.meuDiaPerfil.id;
+    atividadesFonte = atividadesFonte.filter((a) => !a.assignedTo || a.assignedTo === meuId);
+    rotinasFonte = rotinasFonte.filter((r) => !r.assignedTo || r.assignedTo === meuId);
+  }
 
   atividadesFonte
     .filter((a) => a.date === dataStr)
@@ -633,7 +645,7 @@ function renderizarAgendaMembro() {
             const naoFeitaEAtrasada = ehPassado && !i.completed;
             return `
             <div class="settings-row" style="align-items:center;">
-              <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : (ICONE_TIPO[i.type] || '')} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? '📋 ' : ''}${escapeHtml(i.title)}</span>
+              <span style="${i.completed ? 'text-decoration:line-through;color:#8A8A8A;' : ''}${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : ''}">${naoFeitaEAtrasada ? '⚠️ ' : iconeTipoHtml(i.type)} ${i.createdBy && i.assignedTo && i.createdBy !== i.assignedTo ? svgAtribuidaInline() : ''}${escapeHtml(i.title)}</span>
               <span style="font-size:13px;${naoFeitaEAtrasada ? 'color:#C24A2E;font-weight:600;' : 'color:#8A8A8A;'}">${naoFeitaEAtrasada ? 'Não concluída' : (i.time || (i.completed ? '✓ Concluída' : ''))}</span>
             </div>
           `;
@@ -882,6 +894,15 @@ function renderizarProximasAtividades() {
 const ICONE_TIPO = {
   tarefa: '✓', compromisso: '📌', reuniao: '👥', lembrete: '🔔', rotina: '🔁'
 };
+const SVG_COMPROMISSO = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;"><rect x="3.5" y="5.5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17"/><circle cx="12" cy="15" r="2"/></svg>';
+// Ícone (em HTML) de um tipo de atividade — igual ao ICONE_TIPO pra todos, exceto
+// "compromisso", que usa um SVG de linha em vez do emoji de pin de mapa.
+function iconeTipoHtml(tipo) {
+  return tipo === 'compromisso' ? SVG_COMPROMISSO : (ICONE_TIPO[tipo] || '');
+}
+function svgAtribuidaInline() {
+  return '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px;margin-right:2px;"><path d="M20 21v-1.5a4.5 4.5 0 0 0-4.5-4.5h-3A4.5 4.5 0 0 0 8 19.5V21"/><circle cx="10" cy="7.5" r="3.5"/></svg>';
+}
 
 function nomeMembroPorId(id) {
   const membros = window.meuDiaMembros || [];
@@ -903,7 +924,7 @@ function renderizarListaComSeparador(ulElement, itens, onClickOverride) {
   if (atribuidas.length > 0) {
     const divisor = document.createElement('li');
     divisor.className = 'section-divider';
-    divisor.textContent = '📋 Atribuídas a você';
+    divisor.innerHTML = svgAtribuidaInline() + 'Atribuídas a você';
     ulElement.appendChild(divisor);
     atribuidas.forEach((i) => ulElement.appendChild(criarCartaoAtividade(i, onClickOverride)));
   }
@@ -917,7 +938,9 @@ function criarCartaoAtividade(item, onClickOverride) {
   const check = document.createElement('button');
   check.className = 'ac-check' + (item.completed ? ' checked' : '');
   check.setAttribute('aria-label', item.completed ? 'Desmarcar como concluída' : 'Marcar como concluída');
-  check.textContent = item.completed ? '✓' : '';
+  check.innerHTML = item.completed
+    ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l4.5 4.5 10.5-11"/></svg>'
+    : '';
   check.addEventListener('click', (ev) => {
     ev.stopPropagation();
     marcarConcluido(item, !item.completed);
@@ -944,7 +967,7 @@ function criarCartaoAtividade(item, onClickOverride) {
 
   const tipo = document.createElement('span');
   tipo.className = 'ac-tag';
-  tipo.textContent = `${ICONE_TIPO[item.type] || ''} ${rotuloTipo(item.type)}`;
+  tipo.innerHTML = `${iconeTipoHtml(item.type)} ${escapeHtml(rotuloTipo(item.type))}`;
   meta.appendChild(tipo);
 
   const cat = buscarCategoria(item.category);
@@ -964,7 +987,7 @@ function criarCartaoAtividade(item, onClickOverride) {
     const atribuidorEl = document.createElement('span');
     atribuidorEl.className = 'ac-tag ac-tag-atribuida';
     const nomeAtribuidor = nomeMembroPorId(item.createdBy);
-    atribuidorEl.textContent = nomeAtribuidor ? `📋 Atribuída por ${nomeAtribuidor}` : '📋 Atribuída pela gestão';
+    atribuidorEl.innerHTML = svgAtribuidaInline() + (nomeAtribuidor ? `Atribuída por ${escapeHtml(nomeAtribuidor)}` : 'Atribuída pela gestão');
     meta.appendChild(atribuidorEl);
   }
 
@@ -1248,7 +1271,12 @@ function renderizarRotinas() {
 
     const icone = document.createElement('div');
     icone.className = 'routine-icon';
-    icone.textContent = iconeParaRotina(r);
+    const iconeValor = iconeParaRotina(r);
+    if (iconeValor === ICONE_ROTINA_PADRAO) {
+      icone.innerHTML = '<img src="icons/menu/rotina.png" alt="" style="width:28px;height:28px;">';
+    } else {
+      icone.textContent = iconeValor;
+    }
 
     const body = document.createElement('div');
     body.className = 'routine-body';
