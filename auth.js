@@ -190,13 +190,17 @@ async function sincronizarAtividadesDoServidor() {
 }
 
 window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoServidor(atividadesLocais) {
-  if (!window.meuDiaPerfil) return;
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
   const companyId = window.meuDiaPerfil.company_id;
   const meuId = window.meuDiaPerfil.id;
 
   const linhas = atividadesLocais.map((a) => atividadeParaLinha(a, companyId, meuId));
   if (linhas.length > 0) {
-    await supabaseClient.from('activities').upsert(linhas);
+    const { error: erroUpsert } = await supabaseClient.from('activities').upsert(linhas);
+    if (erroUpsert) {
+      console.error('Falha ao salvar atividades no servidor:', erroUpsert);
+      return { ok: false, error: erroUpsert.message };
+    }
   }
 
   const idsLocais = atividadesLocais.map((a) => a.id);
@@ -204,7 +208,12 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   // e que sumiram localmente — nunca mexe em tarefas que atribuí a outras pessoas.
   let query = supabaseClient.from('activities').delete().eq('created_by', meuId).eq('assigned_to', meuId);
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
-  await query;
+  const { error: erroDelete } = await query;
+  if (erroDelete) {
+    console.error('Falha ao limpar atividades removidas no servidor:', erroDelete);
+    return { ok: false, error: erroDelete.message };
+  }
+  return { ok: true };
 };
 
 // -----------------------------------------------------------
@@ -270,20 +279,29 @@ async function sincronizarRotinasDoServidor() {
 }
 
 window.sincronizarRotinasNoServidor = async function sincronizarRotinasNoServidor(rotinasLocais) {
-  if (!window.meuDiaPerfil) return;
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
   const companyId = window.meuDiaPerfil.company_id;
   const meuId = window.meuDiaPerfil.id;
 
   const linhas = rotinasLocais.map((r) => rotinaParaLinha(r, companyId, meuId));
   if (linhas.length > 0) {
-    await supabaseClient.from('activities').upsert(linhas);
+    const { error: erroUpsert } = await supabaseClient.from('activities').upsert(linhas);
+    if (erroUpsert) {
+      console.error('Falha ao salvar rotinas no servidor:', erroUpsert);
+      return { ok: false, error: erroUpsert.message };
+    }
   }
 
   const idsLocais = rotinasLocais.map((r) => r.id);
   let query = supabaseClient.from('activities').delete()
     .eq('type', 'rotina').eq('created_by', meuId).eq('assigned_to', meuId);
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
-  await query;
+  const { error: erroDelete } = await query;
+  if (erroDelete) {
+    console.error('Falha ao limpar rotinas removidas no servidor:', erroDelete);
+    return { ok: false, error: erroDelete.message };
+  }
+  return { ok: true };
 };
 
 // -----------------------------------------------------------
