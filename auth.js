@@ -160,10 +160,17 @@ function atividadeParaLinha(a, companyId, meuId) {
   };
 }
 
+// O Supabase devolve o horário como "23:20:00" (com segundos); o app usa
+// sempre "23:20" — corta os segundos assim que os dados chegam do servidor,
+// pra não aparecer feio em nenhuma tela.
+function cortarSegundos(hhmmss) {
+  return (hhmmss && hhmmss.length > 5) ? hhmmss.slice(0, 5) : (hhmmss || '');
+}
+
 function linhaParaAtividade(r) {
   return {
     id: r.id, title: r.title, description: r.description || '', date: r.date,
-    time: r.time || '', endTime: r.end_time || '', category: r.category_id || '',
+    time: cortarSegundos(r.time), endTime: cortarSegundos(r.end_time), category: r.category_id || '',
     priority: r.priority || 'media', type: r.type || 'tarefa',
     reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
     subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
@@ -253,7 +260,7 @@ function linhaParaRotina(r) {
   const rec = r.recurrence || {};
   return {
     id: r.id, title: r.title, description: r.description || '',
-    time: r.time || '', endTime: r.end_time || '', category: r.category_id || '',
+    time: cortarSegundos(r.time), endTime: cortarSegundos(r.end_time), category: r.category_id || '',
     priority: r.priority || 'media', type: 'rotina',
     reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
     subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
