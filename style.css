@@ -650,7 +650,7 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
     padding: 11px 14px; font-size: 14px; border-radius: 12px;
   }
   .nav-item.active { background: var(--petroleo-light); }
-  .app { margin-left: 220px; margin-right: auto; max-width: 720px; }
+  .app { margin-left: 220px; margin-right: 0; max-width: none; width: calc(100% - 220px); padding-right: 40px; box-sizing: border-box; }
   .fab { display: none; }
 
   .nav-brand { display: flex; align-items: center; gap: 10px; padding: 4px 14px 22px; }
@@ -664,8 +664,8 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
     background: var(--coral); color: var(--branco); border: none; cursor: pointer;
   }
 
-  .today-grid { display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; align-items: start; }
-  .today-side { display: flex; flex-direction: column; gap: 16px; }
+  .today-grid { display: grid; grid-template-columns: 1fr 320px; gap: 24px; align-items: start; max-width: 1300px; }
+  .today-side { display: flex; flex-direction: column; gap: 16px; width: 100%; }
   .side-card { background: var(--surface); border-radius: var(--raio); padding: 16px 18px; box-shadow: var(--sombra); }
   .side-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; font-weight: 800; }
   .icon-btn-small { width: 26px; height: 26px; font-size: 14px; }
