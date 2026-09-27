@@ -10,7 +10,7 @@ const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_3TR-o-OVjoELzg_I_luVFg_ALML3dyB
 const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 function mostrarSomenteEsteScreen(idAlvo) {
-  ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome']
+  ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome', 'screen-auth-forgot', 'screen-auth-reset']
     .forEach((id) => document.getElementById(id).classList.toggle('hidden', id !== idAlvo));
   document.getElementById('app').classList.add('hidden');
 }
@@ -97,7 +97,7 @@ async function verificarAprovacaoEProsseguir() {
   } catch (e) { /* ignora */ }
 
   if (jaOnboarded) {
-    ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome']
+    ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome', 'screen-auth-forgot', 'screen-auth-reset']
       .forEach((id) => document.getElementById(id).classList.add('hidden'));
     document.getElementById('app').classList.remove('hidden');
   } else {
@@ -544,6 +544,75 @@ document.getElementById('btn-goto-signup').addEventListener('click', () => {
 });
 document.getElementById('btn-back-login').addEventListener('click', () => {
   mostrarSomenteEsteScreen('screen-auth-login');
+});
+
+// -----------------------------------------------------------
+// Esqueci minha senha
+// -----------------------------------------------------------
+document.getElementById('btn-goto-forgot').addEventListener('click', () => {
+  esconderErro('auth-forgot-error');
+  document.getElementById('auth-forgot-success').classList.add('hidden');
+  mostrarSomenteEsteScreen('screen-auth-forgot');
+});
+document.getElementById('btn-back-forgot').addEventListener('click', () => {
+  mostrarSomenteEsteScreen('screen-auth-login');
+});
+
+document.getElementById('btn-forgot-submit').addEventListener('click', async () => {
+  esconderErro('auth-forgot-error');
+  document.getElementById('auth-forgot-success').classList.add('hidden');
+  const email = document.getElementById('forgot-email').value.trim();
+
+  if (!email) {
+    mostrarErro('auth-forgot-error', 'Digite o e-mail da sua conta.');
+    return;
+  }
+
+  const urlAtual = window.location.origin + window.location.pathname;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: urlAtual
+  });
+
+  if (error) {
+    mostrarErro('auth-forgot-error', 'Não foi possível enviar o link agora. Tente novamente em instantes.');
+    return;
+  }
+
+  const sucesso = document.getElementById('auth-forgot-success');
+  sucesso.textContent = 'Pronto! Se esse e-mail tiver uma conta, o link pra criar uma senha nova já foi enviado. Confira sua caixa de entrada (e o spam).';
+  sucesso.classList.remove('hidden');
+});
+
+// -----------------------------------------------------------
+// Criar nova senha (depois de clicar no link recebido por e-mail)
+// -----------------------------------------------------------
+document.getElementById('btn-reset-submit').addEventListener('click', async () => {
+  esconderErro('auth-reset-error');
+  const novaSenha = document.getElementById('reset-password').value;
+
+  if (!novaSenha || novaSenha.length < 6) {
+    mostrarErro('auth-reset-error', 'A senha precisa ter pelo menos 6 caracteres.');
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.updateUser({ password: novaSenha });
+
+  if (error) {
+    mostrarErro('auth-reset-error', 'Não foi possível salvar a nova senha. Tente clicar no link do e-mail novamente.');
+    return;
+  }
+
+  document.getElementById('reset-password').value = '';
+  await verificarAprovacaoEProsseguir();
+});
+
+// Quando a pessoa clica no link de "esqueci minha senha" recebido por e-mail,
+// o Supabase abre o app com uma sessão especial de recuperação. Detectamos
+// isso aqui e mandamos ela direto pra tela de "criar nova senha".
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    mostrarSomenteEsteScreen('screen-auth-reset');
+  }
 });
 
 // -----------------------------------------------------------
