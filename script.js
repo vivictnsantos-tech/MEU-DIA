@@ -800,6 +800,77 @@ function renderizarHoje() {
     concluidasLista.forEach((i) => ulDone.appendChild(criarCartaoAtividade(i)));
     btnToggle.textContent = 'Ocultar concluídas';
   }
+
+  renderizarMiniCalendario();
+  renderizarProximasAtividades();
+}
+
+/* ================================================================
+   PAINEL LATERAL DO "HOJE" (computador): mini calendário + próximas
+   ================================================================ */
+
+let miniCalMesExibido = hojeStr().slice(0, 7); // "YYYY-MM"
+
+function renderizarMiniCalendario() {
+  const grid = document.getElementById('mini-cal-grid');
+  const label = document.getElementById('mini-cal-label');
+  if (!grid || !label) return;
+
+  const [ano, mes] = miniCalMesExibido.split('-').map(Number);
+  const NOMES_MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  label.textContent = `${NOMES_MESES[mes - 1]} ${ano}`;
+
+  const primeiroDia = new Date(ano, mes - 1, 1);
+  const diaSemanaInicio = primeiroDia.getDay();
+  const diasNoMes = new Date(ano, mes, 0).getDate();
+  const diasNoMesAnterior = new Date(ano, mes - 1, 0).getDate();
+  const hoje = hojeStr();
+
+  let html = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d) => `<div class="mini-cal-dow">${d}</div>`).join('');
+
+  for (let i = diaSemanaInicio - 1; i >= 0; i--) {
+    html += `<div class="mini-cal-day outro-mes">${diasNoMesAnterior - i}</div>`;
+  }
+  for (let d = 1; d <= diasNoMes; d++) {
+    const dataStr = `${ano}-${String(mes).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    html += `<div class="mini-cal-day${dataStr === hoje ? ' hoje' : ''}">${d}</div>`;
+  }
+  const totalCelulas = diaSemanaInicio + diasNoMes;
+  const sobra = (7 - (totalCelulas % 7)) % 7;
+  for (let d = 1; d <= sobra; d++) {
+    html += `<div class="mini-cal-day outro-mes">${d}</div>`;
+  }
+
+  grid.innerHTML = html;
+}
+
+function renderizarProximasAtividades() {
+  const lista = document.getElementById('upcoming-list');
+  if (!lista) return;
+
+  const hoje = hojeStr();
+  const encontrados = [];
+  let cursor = somarDias(hoje, 1);
+  for (let i = 0; i < 30 && encontrados.length < 5; i++) {
+    ocorrenciasDoDia(cursor).filter((it) => !it.completed).forEach((it) => {
+      if (encontrados.length < 5) encontrados.push({ ...it, data: cursor });
+    });
+    cursor = somarDias(cursor, 1);
+  }
+
+  if (!encontrados.length) {
+    lista.innerHTML = '<p class="upcoming-empty">Nada agendado pros próximos dias ainda.</p>';
+    return;
+  }
+
+  lista.innerHTML = encontrados.map((it) => {
+    const rotulo = it.data === amanhaStr() ? 'Amanhã' : rotuloDataCurta(it.data);
+    const hora = it.time ? ` · ${it.time}` : '';
+    return `<div class="upcoming-item">
+      <span class="ui-title">${escapeHtml(it.title)}</span>
+      <span class="ui-meta">${rotulo}${hora}</span>
+    </div>`;
+  }).join('');
 }
 
 /* ================================================================
@@ -2580,6 +2651,20 @@ function inicializar() {
   document.getElementById('fab-add').addEventListener('click', abrirModalNovaAtividade);
   const btnHeaderAdd = document.getElementById('btn-header-add');
   if (btnHeaderAdd) btnHeaderAdd.addEventListener('click', abrirModalNovaAtividade);
+  const miniCalPrev = document.getElementById('mini-cal-prev');
+  const miniCalNext = document.getElementById('mini-cal-next');
+  if (miniCalPrev) miniCalPrev.addEventListener('click', () => {
+    const [a, m] = miniCalMesExibido.split('-').map(Number);
+    const d = new Date(a, m - 2, 1);
+    miniCalMesExibido = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    renderizarMiniCalendario();
+  });
+  if (miniCalNext) miniCalNext.addEventListener('click', () => {
+    const [a, m] = miniCalMesExibido.split('-').map(Number);
+    const d = new Date(a, m, 1);
+    miniCalMesExibido = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    renderizarMiniCalendario();
+  });
   document.getElementById('btn-settings').addEventListener('click', () => irParaTela('screen-settings'));
   const btnVerAgendaMembro = document.getElementById('btn-ver-agenda-membro');
   if (btnVerAgendaMembro) {
