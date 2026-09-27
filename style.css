@@ -43,6 +43,30 @@
   --coral-light: #3A2A24;
 }
 
+/* No modo escuro, --petroleo-dark e --marinho continuam bem escuros (são
+   usados também como FUNDO em alguns botões), então os textos que usam
+   essas cores viravam quase invisíveis em cima de fundos escuros. Aqui a
+   gente clareia só os usos como TEXTO, sem mexer nas variáveis originais. */
+:root[data-theme="dark"] .btn-secondary,
+:root[data-theme="dark"] .quote-box,
+:root[data-theme="dark"] .filter-pill,
+:root[data-theme="dark"] .ac-tag,
+:root[data-theme="dark"] .segmented-btn,
+:root[data-theme="dark"] .cal-day.today,
+:root[data-theme="dark"] .donut-percent,
+:root[data-theme="dark"] .week-bar-pct,
+:root[data-theme="dark"] .encouragement,
+:root[data-theme="dark"] .routine-icon,
+:root[data-theme="dark"] .settings-section-title,
+:root[data-theme="dark"] .settings-row.linklike {
+  color: #8FD9C7;
+}
+:root[data-theme="dark"] .welcome-card h1,
+:root[data-theme="dark"] .next-appointment .na-title,
+:root[data-theme="dark"] .cal-label {
+  color: #D7E4EA;
+}
+
 * { box-sizing: border-box; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
@@ -134,7 +158,7 @@ ul { list-style: none; margin: 0; padding: 0; }
    CAMPOS DE FORMULÁRIO
    ============================================================ */
 .field { display: block; margin-bottom: 16px; }
-.checkbox-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; padding: 8px 12px; }
+.checkbox-list { display: flex; flex-direction: column; gap: 6px; max-height: 160px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
 .checkbox-list label { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 4px 0; }
 .checkbox-list input[type="checkbox"] { width: 18px; height: 18px; }
 .auth-error { background: #FBE4E0; color: #B3452F; padding: 10px 14px; border-radius: 10px; font-size: 14px; margin-bottom: 14px; }
@@ -313,7 +337,7 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
 .ac-tag-atribuida { background: #FFE9CC; color: #8A5A00; }
 .section-divider {
   list-style: none; font-size: 13px; font-weight: 700; color: var(--text-muted);
-  margin: 18px 0 4px; padding-top: 10px; border-top: 1px dashed rgba(0,0,0,0.12);
+  margin: 18px 0 4px; padding-top: 10px; border-top: 1px dashed var(--border);
 }
 .ac-time { font-size: 12.5px; color: var(--text-muted); font-weight: 700; }
 .ac-subprogress { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; font-weight: 600; }
