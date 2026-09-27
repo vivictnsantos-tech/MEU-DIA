@@ -2059,16 +2059,24 @@ function configurarToastLembrete() {
   });
 }
 
+// Som do lembrete: um "dim-dom" de dois tons, mais forte e com uma
+// caída suave no final (em vez de um bipe único, baixo e seco).
 function tocarSom() {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.frequency.value = 660;
-    gain.gain.setValueAtTime(0.15, ctx.currentTime);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
+    [{ freq: 880, atraso: 0 }, { freq: 659, atraso: 0.16 }].forEach(({ freq, atraso }) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const inicio = ctx.currentTime + atraso;
+      gain.gain.setValueAtTime(0.001, inicio);
+      gain.gain.exponentialRampToValueAtTime(0.45, inicio + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, inicio + 0.4);
+      osc.start(inicio);
+      osc.stop(inicio + 0.42);
+    });
   } catch (e) { /* som não suportado, seguir sem erro */ }
 }
 
