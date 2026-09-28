@@ -4,7 +4,7 @@
    e por exibir notificações locais quando o navegador permitir.
    ============================================================ */
 
-const CACHE_NAME = 'meu-dia-cache-v42';
+const CACHE_NAME = 'meu-dia-cache-v44';
 const APP_SHELL = [
   './',
   './index.html',
@@ -66,6 +66,22 @@ self.addEventListener('message', (event) => {
     const { title, options } = data;
     self.registration.showNotification(title, options);
   }
+});
+
+// Notificação push de verdade, mandada pelo servidor (Edge Function
+// "send-reminders" do Supabase) — essa é a que funciona mesmo com o app
+// fechado ou o celular travado, diferente da mensagem acima (que só
+// funciona com o app aberto em algum lugar).
+self.addEventListener('push', (event) => {
+  let dados = {};
+  try { dados = event.data ? event.data.json() : {}; } catch (e) { dados = {}; }
+  const titulo = dados.title || 'Meu Dia';
+  const opcoes = {
+    body: dados.body || '',
+    icon: dados.icon || 'icons/icon-192.png',
+    badge: 'icons/icon-192.png'
+  };
+  event.waitUntil(self.registration.showNotification(titulo, opcoes));
 });
 
 // Clique na notificação: foca ou abre a janela do app
