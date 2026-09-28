@@ -188,6 +188,22 @@ function carregarEstado() {
   state.history = carregar(CHAVES.history, {});
 }
 
+// Tarefas avulsas (não-rotina) que ficaram sem concluir num dia passado são
+// jogadas automaticamente pra hoje — assim elas continuam aparecendo até a
+// pessoa realmente concluir, em vez de ficar "esquecida" numa data antiga.
+// Rotinas não entram aqui porque já se repetem sozinhas todo dia.
+function adiantarPendentesParaHoje() {
+  const hoje = hojeStr();
+  let mudou = false;
+  state.activities.forEach((a) => {
+    if (!a.completed && a.date && a.date < hoje) {
+      a.date = hoje;
+      mudou = true;
+    }
+  });
+  if (mudou) salvarAtividades();
+}
+
 function salvarAtividades() {
   salvar(CHAVES.activities, state.activities);
   if (window.sincronizarAtividadesNoServidor) return window.sincronizarAtividadesNoServidor(state.activities);
@@ -848,22 +864,14 @@ function renderizarHoje() {
   ];
   document.getElementById('today-quote').textContent = frasesHoje[new Date().getDate() % frasesHoje.length];
 
-  // Prioridades em destaque (até 3, alta prioridade e não concluídas)
-  const prioridades = itens.filter((i) => i.priority === 'alta' && !i.completed).slice(0, 3);
+  // Bloco "Prioridades de hoje" removido a pedido — ficava confuso repetir
+  // a mesma atividade em destaque e de novo na lista de pendentes. Agora só
+  // existe a lista de pendentes.
   const blocoPrio = document.getElementById('today-priorities');
-  const listaPrio = document.getElementById('today-priorities-list');
-  if (prioridades.length) {
-    blocoPrio.classList.remove('hidden');
-    listaPrio.innerHTML = '';
-    prioridades.forEach((i) => listaPrio.appendChild(criarCartaoAtividade(i)));
-  } else {
-    blocoPrio.classList.add('hidden');
-  }
+  if (blocoPrio) blocoPrio.classList.add('hidden');
 
-  // Listas pendentes / concluídas — o que já apareceu em "Prioridades de
-  // hoje" não repete aqui embaixo de novo.
-  const idsPrioridades = new Set(prioridades.map((i) => i.id));
-  const pendentes = itens.filter((i) => !i.completed && !idsPrioridades.has(i.id));
+  // Listas pendentes / concluídas
+  const pendentes = itens.filter((i) => !i.completed);
   const concluidasLista = itens.filter((i) => i.completed);
 
   const ulPend = document.getElementById('today-pending-list');
@@ -1020,7 +1028,10 @@ function criarCartaoAtividade(item, onClickOverride) {
 
   const titulo = document.createElement('p');
   titulo.className = 'ac-title';
-  titulo.textContent = item.title;
+  // Prioridade alta é sinalizada com um 🔥 do lado do título (mais o fundo
+  // avermelhado do card, já existente) — em vez de um bloco separado de
+  // "prioridades" repetindo a mesma atividade lá em cima.
+  titulo.textContent = (item.priority === 'alta' ? '🔥 ' : '') + item.title;
   body.appendChild(titulo);
 
   if (item.description) {
@@ -2849,6 +2860,7 @@ function inicializar() {
   if (primeiraVez) inicializarDadosVazios();
 
   carregarEstado();
+  adiantarPendentesParaHoje();
   aplicarTema();
 
   configurarNavegacao();
