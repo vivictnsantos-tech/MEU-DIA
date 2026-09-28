@@ -860,8 +860,10 @@ function renderizarHoje() {
     blocoPrio.classList.add('hidden');
   }
 
-  // Listas pendentes / concluídas
-  const pendentes = itens.filter((i) => !i.completed);
+  // Listas pendentes / concluídas — o que já apareceu em "Prioridades de
+  // hoje" não repete aqui embaixo de novo.
+  const idsPrioridades = new Set(prioridades.map((i) => i.id));
+  const pendentes = itens.filter((i) => !i.completed && !idsPrioridades.has(i.id));
   const concluidasLista = itens.filter((i) => i.completed);
 
   const ulPend = document.getElementById('today-pending-list');
@@ -1020,6 +1022,13 @@ function criarCartaoAtividade(item, onClickOverride) {
   titulo.className = 'ac-title';
   titulo.textContent = item.title;
   body.appendChild(titulo);
+
+  if (item.description) {
+    const desc = document.createElement('p');
+    desc.className = 'ac-description';
+    desc.textContent = item.description;
+    body.appendChild(desc);
+  }
 
   const meta = document.createElement('div');
   meta.className = 'ac-meta';
@@ -1622,6 +1631,10 @@ let atividadeEditandoAssignedTo = null;
 // gravar direto no servidor pra essa pessoa, sem misturar com o próprio state.
 let contextoEdicaoMembro = null;
 
+// Evita salvar a mesma atividade/rotina duas vezes por um toque duplo no
+// botão "Salvar atividade" (ver o listener de submit do form-activity).
+let salvandoAtividadeEmAndamento = false;
+
 function fonteAtividadesEdicao() {
   return contextoEdicaoMembro ? contextoEdicaoMembro.conjunto.activities : state.activities;
 }
@@ -1825,7 +1838,7 @@ function configurarFormAtividade() {
     sincronizarChipsPrioridade();
   });
 
-  document.getElementById('form-activity').addEventListener('submit', (ev) => {
+  document.getElementById('form-activity').addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const titulo = document.getElementById('act-title').value.trim();
     if (!titulo) {
@@ -1834,7 +1847,20 @@ function configurarFormAtividade() {
       return;
     }
     document.getElementById('act-title-error').classList.add('hidden');
-    salvarAtividadeDoFormulario(titulo);
+
+    // Trava o botão de salvar enquanto a gravação está em andamento — evita
+    // que um toque duplo (ou um clique + o dedo escorregando) crie a mesma
+    // atividade/rotina duas vezes por engano.
+    if (salvandoAtividadeEmAndamento) return;
+    salvandoAtividadeEmAndamento = true;
+    const btnSalvar = document.querySelector('#form-activity button[type="submit"]');
+    if (btnSalvar) btnSalvar.disabled = true;
+    try {
+      await salvarAtividadeDoFormulario(titulo);
+    } finally {
+      salvandoAtividadeEmAndamento = false;
+      if (btnSalvar) btnSalvar.disabled = false;
+    }
   });
 }
 
@@ -2485,6 +2511,43 @@ function dispararLembrete(item) {
   }
 }
 
+/* ================================================================
+   NOTIFICAÇÃO PUSH (funciona mesmo com o app fechado/celular travado)
+   Chave pública VAPID — combina com a chave privada guardada só no
+   servidor (Edge Function "send-reminders" do Supabase).
+   ================================================================ */
+const VAPID_PUBLIC_KEY = 'BNWeoBn_rhJ5XjOgFUaSt9cIeBGuC_GUK8qfuYlqE7V-f8ZJmK44hPS5bGZoEXZ0CVLIwfZ_7prczbA94pL6XL8';
+
+function urlBase64ParaUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
+// Inscreve este aparelho pra receber notificação push e salva a inscrição
+// no servidor (associada à pessoa logada) — é isso que permite o servidor
+// mandar o aviso mesmo com o app fechado. Sem suporte no navegador (ex:
+// iPhone fora do modo "instalado na tela de início"), não faz nada.
+async function inscreverPushNotification() {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  try {
+    const registro = await navigator.serviceWorker.ready;
+    let subscription = await registro.pushManager.getSubscription();
+    if (!subscription) {
+      subscription = await registro.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ParaUint8Array(VAPID_PUBLIC_KEY)
+      });
+    }
+    if (window.salvarInscricaoPush) await window.salvarInscricaoPush(subscription);
+  } catch (e) {
+    console.error('Falha ao inscrever notificação push:', e);
+  }
+}
+
 let toastItemAtual = null;
 function mostrarToastLembrete(item) {
   toastItemAtual = item;
@@ -2606,7 +2669,11 @@ function configurarConfiguracoes() {
       const perm = await Notification.requestPermission();
       state.settings.notifications = perm === 'granted';
       ev.target.checked = state.settings.notifications;
-      if (perm !== 'granted') alert('As notificações não foram permitidas pelo navegador. Você ainda verá avisos dentro do aplicativo enquanto ele estiver aberto.');
+      if (perm !== 'granted') {
+        alert('As notificações não foram permitidas pelo navegador. Você ainda verá avisos dentro do aplicativo enquanto ele estiver aberto.');
+      } else {
+        await inscreverPushNotification();
+      }
     } else {
       state.settings.notifications = ev.target.checked;
     }
@@ -2863,6 +2930,10 @@ function inicializar() {
 
   setInterval(verificarLembretes, 20000);
   verificarLembretes();
+  // Se a pessoa já tinha ativado notificações antes dessa atualização,
+  // inscreve o aparelho na notificação push sem precisar desligar/ligar
+  // o interruptor de novo.
+  if (state.settings.notifications) inscreverPushNotification();
 
   registrarServiceWorker();
   verificarAvisoInstalacaoIOS();
