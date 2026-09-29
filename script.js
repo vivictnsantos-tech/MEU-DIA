@@ -1106,7 +1106,11 @@ function criarCartaoAtividade(item, onClickOverride) {
 
   li.addEventListener('click', () => {
     if (onClickOverride) onClickOverride(item);
-    else abrirModalAtividade(item);
+    // Quando o item é uma ROTINA, precisa passar o objeto original dela
+    // (objetoOriginal) além da ocorrência normalizada — sem isso o modal não
+    // acha o que editar e, ao salvar, cria uma atividade NOVA do zero em vez
+    // de atualizar a rotina existente (causa da "duplicação" ao editar).
+    else abrirModalAtividade(item, item.isRoutine ? objetoOriginal(item) : null);
   });
 
   return li;
@@ -2577,7 +2581,7 @@ function configurarToastLembrete() {
     const item = toastItemAtual;
     if (acao === 'focus') { document.getElementById('reminder-toast').classList.add('hidden'); abrirModoFoco(item); return; }
     else if (acao === 'complete') { marcarConcluido(item, true); renderizarTelaAtual(telaAtivaId()); }
-    else if (acao === 'open') { abrirModalAtividade(item); }
+    else if (acao === 'open') { abrirModalAtividade(item, item.isRoutine ? objetoOriginal(item) : null); }
     else if (acao === 'snooze5') adiarLembrete(item, 5);
     else if (acao === 'snooze10') adiarLembrete(item, 10);
     else if (acao === 'snooze15') adiarLembrete(item, 15);
