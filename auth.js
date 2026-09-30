@@ -246,6 +246,26 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
 };
 
 // -----------------------------------------------------------
+// Nome do perfil: o campo "Como podemos te chamar?" nas Configurações
+// mexia só num apelido guardado NO APARELHO (usado na saudação "Boa
+// noite, Fulano"), sem nunca atualizar o nome de verdade no banco de
+// dados — por isso a pessoa mudava o nome, mas continuava aparecendo
+// errado (ex: "Colaborador Teste") na lista de responsáveis que o
+// gestor vê. Essa função atualiza o nome oficial no servidor também.
+// -----------------------------------------------------------
+window.atualizarNomePerfil = async function atualizarNomePerfil(novoNome) {
+  if (!window.meuDiaPerfil || !novoNome || !novoNome.trim()) return { ok: false, error: 'sem perfil ou nome vazio' };
+  const nome = novoNome.trim();
+  const { error } = await supabaseClient.from('profiles').update({ name: nome }).eq('id', window.meuDiaPerfil.id);
+  if (error) {
+    console.error('Falha ao atualizar nome do perfil:', error);
+    return { ok: false, error: error.message };
+  }
+  window.meuDiaPerfil.name = nome;
+  return { ok: true };
+};
+
+// -----------------------------------------------------------
 // Notificação push: guarda a "inscrição" deste aparelho (celular/PC),
 // associada à pessoa logada, pra o servidor conseguir mandar avisos
 // mesmo com o app fechado (ver Edge Function "send-reminders").
