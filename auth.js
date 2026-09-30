@@ -129,9 +129,12 @@ window.sincronizarCategoriasNoServidor = async function sincronizarCategoriasNoS
   }
 
   const idsLocais = categoriasLocais.map((c) => c.id);
-  let query = supabaseClient.from('categories').delete().eq('company_id', companyId);
-  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
-  await query;
+  // MESMA TRAVA de segurança das outras sincronizações: se a lista local
+  // estiver vazia, nunca apaga nada — aqui seria ainda pior, porque apagaria
+  // as categorias de TODA a empresa de uma vez, não só de uma pessoa.
+  if (idsLocais.length === 0) return;
+  await supabaseClient.from('categories').delete().eq('company_id', companyId)
+    .not('id', 'in', `(${idsLocais.join(',')})`);
 };
 
 // -----------------------------------------------------------
@@ -226,10 +229,15 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   // mais abaixo). Sem esse filtro, uma rotina que por engano não estivesse na lista local de
   // atividades passada aqui seria apagada de vez do banco de dados — foi exatamente isso que
   // causou a perda de "RESPONSABILIDADES PRINCIPAIS" e "ACOMPANHAMENTO DE PESSOAS".
-  let query = supabaseClient.from('activities').delete()
-    .eq('created_by', meuId).eq('assigned_to', meuId).neq('type', 'rotina');
-  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
-  const { error: erroDelete } = await query;
+  // IMPORTANTE 2: se a lista local estiver vazia (idsLocais.length === 0), NÃO apaga nada —
+  // uma lista vazia quase sempre é sinal de algo ainda carregando ou de uma falha momentânea,
+  // nunca prova de que a pessoa apagou tudo de propósito. Sem essa trava, uma lista local vazia
+  // vira "apague tudo que essa pessoa tem no servidor" (foi isso que apagou TODAS as rotinas da
+  // Vanessa de uma vez). Só apaga quando dá pra comparar com uma lista de verdade.
+  if (idsLocais.length === 0) return { ok: true };
+  const { error: erroDelete } = await supabaseClient.from('activities').delete()
+    .eq('created_by', meuId).eq('assigned_to', meuId).neq('type', 'rotina')
+    .not('id', 'in', `(${idsLocais.join(',')})`);
   if (erroDelete) {
     console.error('Falha ao limpar atividades removidas no servidor:', erroDelete);
     return { ok: false, error: erroDelete.message };
@@ -368,10 +376,16 @@ window.sincronizarRotinasNoServidor = async function sincronizarRotinasNoServido
   }
 
   const idsLocais = rotinasLocais.map((r) => r.id);
-  let query = supabaseClient.from('activities').delete()
-    .eq('type', 'rotina').eq('created_by', meuId).eq('assigned_to', meuId);
-  if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
-  const { error: erroDelete } = await query;
+  // MESMA TRAVA da sincronização de atividades: se a lista local de rotinas
+  // estiver vazia, NUNCA apaga nada no servidor. Sem essa trava, uma lista
+  // vazia (por exemplo, um instante em que o aparelho ainda não tinha
+  // carregado as rotinas direito) virava "apague TODAS as rotinas dessa
+  // pessoa" — foi exatamente isso que apagou de uma vez todas as rotinas
+  // da Vanessa. Só apaga quando existe uma lista de verdade pra comparar.
+  if (idsLocais.length === 0) return { ok: true };
+  const { error: erroDelete } = await supabaseClient.from('activities').delete()
+    .eq('type', 'rotina').eq('created_by', meuId).eq('assigned_to', meuId)
+    .not('id', 'in', `(${idsLocais.join(',')})`);
   if (erroDelete) {
     console.error('Falha ao limpar rotinas removidas no servidor:', erroDelete);
     return { ok: false, error: erroDelete.message };
