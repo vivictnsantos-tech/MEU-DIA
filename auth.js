@@ -186,10 +186,18 @@ async function sincronizarAtividadesDoServidor() {
   // hoje; um painel de acompanhamento da equipe pode vir depois).
   const meuId = window.meuDiaPerfil ? window.meuDiaPerfil.id : null;
   if (!meuId) return;
+  // IMPORTANTE: exclui type='rotina' aqui — rotina tem sua própria sincronização
+  // (sincronizarRotinasDoServidor, logo abaixo) e sua própria lista local
+  // (meudia_routines). Sem esse filtro, toda rotina também caía nessa lista de
+  // tarefas avulsas (meudia_activities) e aparecia duplicada na tela "Hoje": uma
+  // vez como rotina de verdade, outra vez como se fosse uma tarefa criada do
+  // zero — e essa cópia "vazada" ainda era empurrada pra hoje todo dia pelo
+  // rolamento automático de pendentes, parecendo reaparecer sozinha.
   const { data, error } = await supabaseClient
     .from('activities')
     .select('*')
     .eq('assigned_to', meuId)
+    .neq('type', 'rotina')
     .order('date', { ascending: true });
   if (!error && data) {
     localStorage.setItem('meudia_activities', JSON.stringify(data.map(linhaParaAtividade)));
@@ -219,6 +227,28 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   if (erroDelete) {
     console.error('Falha ao limpar atividades removidas no servidor:', erroDelete);
     return { ok: false, error: erroDelete.message };
+  }
+  return { ok: true };
+};
+
+// -----------------------------------------------------------
+// Notificação push: guarda a "inscrição" deste aparelho (celular/PC),
+// associada à pessoa logada, pra o servidor conseguir mandar avisos
+// mesmo com o app fechado (ver Edge Function "send-reminders").
+// -----------------------------------------------------------
+window.salvarInscricaoPush = async function salvarInscricaoPush(subscription) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys) return { ok: false, error: 'inscrição inválida' };
+  const { error } = await supabaseClient.from('push_subscriptions').upsert({
+    user_id: window.meuDiaPerfil.id,
+    endpoint: json.endpoint,
+    p256dh: json.keys.p256dh,
+    auth: json.keys.auth
+  }, { onConflict: 'endpoint' });
+  if (error) {
+    console.error('Falha ao salvar inscrição push:', error);
+    return { ok: false, error: error.message };
   }
   return { ok: true };
 };
