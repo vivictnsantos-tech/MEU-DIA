@@ -2720,7 +2720,11 @@ function tocarSomFimDoFoco() {
    ================================================================ */
 
 function renderizarConfiguracoes() {
-  document.getElementById('settings-name').value = state.settings.userName || '';
+  // Prioriza o nome oficial do perfil (o que aparece pra gestão/equipe) —
+  // só cai pro apelido local se, por algum motivo, o perfil ainda não
+  // tiver carregado.
+  const nomeOficial = (window.meuDiaPerfil && window.meuDiaPerfil.name) || state.settings.userName || '';
+  document.getElementById('settings-name').value = nomeOficial;
   document.getElementById('settings-dark').checked = state.settings.theme === 'dark';
   document.getElementById('settings-notifications').checked = !!state.settings.notifications;
   document.getElementById('settings-sounds').checked = state.settings.sounds !== false;
@@ -2736,6 +2740,12 @@ function configurarConfiguracoes() {
     state.settings.userName = ev.target.value;
     salvarSettings();
     atualizarCabecalho();
+  });
+  // Só manda pro servidor quando a pessoa sai do campo (blur) — evita mandar
+  // uma atualização a cada letra digitada. Isso é o que corrige, pra valer,
+  // o nome que aparece pra gestão/equipe (antes só mudava localmente).
+  document.getElementById('settings-name').addEventListener('blur', (ev) => {
+    if (window.atualizarNomePerfil) window.atualizarNomePerfil(ev.target.value);
   });
 
   document.getElementById('settings-dark').addEventListener('change', (ev) => {
