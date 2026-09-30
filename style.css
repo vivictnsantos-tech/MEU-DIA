@@ -391,6 +391,16 @@ fieldset { border: none; padding: 0; margin: 0 0 16px; }
 .ac-subprogress { font-size: 11.5px; color: var(--text-muted); margin-top: 5px; font-weight: 600; }
 .ac-type-icon { font-size: 12px; }
 
+.ac-subtasks-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.ac-subtask-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); }
+.ac-subtask-row.done span { color: var(--text-muted); text-decoration: line-through; }
+.ac-subtask-check {
+  flex: none; width: 18px; height: 18px; border-radius: 6px; border: 1.5px solid var(--border);
+  background: var(--surface); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; padding: 0; color: #fff;
+}
+.ac-subtask-check.checked { background: var(--petroleo-dark); border-color: var(--petroleo-dark); }
+
 .ac-more { background: none; border: none; font-size: 19px; color: var(--text-muted); cursor: pointer; padding: 4px 4px; align-self: center; }
 .ac-start-btn {
   background: var(--coral); color: var(--branco); border: none; border-radius: var(--raio-pill);
