@@ -221,7 +221,13 @@ window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoS
   const idsLocais = atividadesLocais.map((a) => a.id);
   // Só apaga no servidor as atividades que EU criei E que são minhas mesmo (autoatribuídas)
   // e que sumiram localmente — nunca mexe em tarefas que atribuí a outras pessoas.
-  let query = supabaseClient.from('activities').delete().eq('created_by', meuId).eq('assigned_to', meuId);
+  // IMPORTANTE: .neq('type', 'rotina') aqui é essencial — essa função só deve mexer em
+  // tarefas avulsas. Rotina tem sua própria sincronização/exclusão (sincronizarRotinasNoServidor,
+  // mais abaixo). Sem esse filtro, uma rotina que por engano não estivesse na lista local de
+  // atividades passada aqui seria apagada de vez do banco de dados — foi exatamente isso que
+  // causou a perda de "RESPONSABILIDADES PRINCIPAIS" e "ACOMPANHAMENTO DE PESSOAS".
+  let query = supabaseClient.from('activities').delete()
+    .eq('created_by', meuId).eq('assigned_to', meuId).neq('type', 'rotina');
   if (idsLocais.length > 0) query = query.not('id', 'in', `(${idsLocais.join(',')})`);
   const { error: erroDelete } = await query;
   if (erroDelete) {
