@@ -1,863 +1,846 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Meu Dia — Agenda Flexível</title>
-<meta name="description" content="Agenda flexível com checklist para organizar seu dia, pensada para quem tem dificuldade de concentração.">
-<meta name="theme-color" content="#1F5C54">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" href="icons/icon-192.png">
-<link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-</head>
-<body>
+// =========================================================
+// MEU DIA — Autenticação (login, cadastro e aprovação)
+// =========================================================
 
-<!-- ============================================================
-     LOGIN
-     ============================================================ -->
-<section id="screen-auth-login" class="screen screen-welcome active" aria-label="Entrar">
-  <div class="welcome-card">
-    <h1 style="font-size:22px;">Entrar no Meu Dia</h1>
-    <p id="auth-login-error" class="auth-error hidden"></p>
+// Dados do projeto Supabase "Meu Dia". A "publishable key" é pública
+// por design (protegida pelas regras RLS do banco) — não é segredo.
+const SUPABASE_URL = 'https://qolckxsgpxnaiearxhii.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_3TR-o-OVjoELzg_I_luVFg_ALML3dyB';
 
-    <label class="field">
-      <span>E-mail</span>
-      <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="username">
-    </label>
-    <label class="field">
-      <span>Senha</span>
-      <input type="password" id="login-password" placeholder="Sua senha" autocomplete="current-password">
-    </label>
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-    <button id="btn-login-submit" class="btn btn-primary btn-block">Entrar</button>
-    <button id="btn-goto-forgot" class="settings-row linklike" type="button" style="justify-content:center;margin-top:12px;border-bottom:none;">Esqueci minha senha</button>
-    <button id="btn-goto-signup" class="btn btn-secondary btn-block" type="button" style="margin-top:10px;">Criar minha conta</button>
-  </div>
-</section>
+function mostrarSomenteEsteScreen(idAlvo) {
+  ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome', 'screen-auth-forgot', 'screen-auth-reset']
+    .forEach((id) => document.getElementById(id).classList.toggle('hidden', id !== idAlvo));
+  document.getElementById('app').classList.add('hidden');
+}
 
-<!-- ============================================================
-     ESQUECI MINHA SENHA
-     ============================================================ -->
-<section id="screen-auth-forgot" class="screen screen-welcome hidden" aria-label="Esqueci minha senha">
-  <div class="welcome-card">
-    <button id="btn-back-forgot" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
-    <h1 style="font-size:22px;">Esqueci minha senha</h1>
-    <p class="hint-text">Digite o e-mail da sua conta. Vamos te mandar um link pra criar uma senha nova.</p>
-    <p id="auth-forgot-error" class="auth-error hidden"></p>
-    <p id="auth-forgot-success" class="auth-error hidden" style="background:var(--petroleo-light);color:var(--petroleo-dark);"></p>
+function mostrarErro(idElemento, mensagem) {
+  const el = document.getElementById(idElemento);
+  el.textContent = mensagem;
+  el.classList.remove('hidden');
+}
 
-    <label class="field">
-      <span>E-mail</span>
-      <input type="email" id="forgot-email" placeholder="seu@email.com" autocomplete="username">
-    </label>
+function esconderErro(idElemento) {
+  document.getElementById(idElemento).classList.add('hidden');
+}
 
-    <button id="btn-forgot-submit" class="btn btn-primary btn-block" type="button">Enviar link</button>
-  </div>
-</section>
+// -----------------------------------------------------------
+// Depois do login: descobre se a pessoa já está aprovada
+// -----------------------------------------------------------
+async function verificarAprovacaoEProsseguir() {
+  const { data: sessionData } = await supabaseClient.auth.getSession();
+  const usuario = sessionData?.session?.user;
+  if (!usuario) {
+    mostrarSomenteEsteScreen('screen-auth-login');
+    return;
+  }
 
-<!-- ============================================================
-     CRIAR NOVA SENHA (depois de clicar no link do e-mail)
-     ============================================================ -->
-<section id="screen-auth-reset" class="screen screen-welcome hidden" aria-label="Criar nova senha">
-  <div class="welcome-card">
-    <h1 style="font-size:22px;">Criar nova senha</h1>
-    <p class="hint-text">Digite sua nova senha pra continuar usando o Meu Dia.</p>
-    <p id="auth-reset-error" class="auth-error hidden"></p>
+  const { data: perfil, error } = await supabaseClient
+    .from('profiles')
+    .select('approved, role, name, company_id')
+    .eq('id', usuario.id)
+    .maybeSingle();
 
-    <label class="field">
-      <span>Nova senha</span>
-      <input type="password" id="reset-password" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
-    </label>
+  if (error || !perfil) {
+    // Pode ser um cadastro que ficou pela metade (ex: confirmação de e-mail no meio do caminho).
+    const pendente = localStorage.getItem('meudia_pending_profile');
+    if (pendente) {
+      try {
+        const dados = JSON.parse(pendente);
+        const { error: erroCriar } = await supabaseClient.from('profiles').insert({
+          id: usuario.id,
+          company_id: dados.companyId,
+          role: 'collaborator',
+          name: dados.name,
+          approved: false
+        });
+        if (!erroCriar) {
+          localStorage.removeItem('meudia_pending_profile');
+          mostrarSomenteEsteScreen('screen-auth-pending');
+          return;
+        }
+      } catch (e) { /* segue para o erro normal abaixo */ }
+    }
 
-    <button id="btn-reset-submit" class="btn btn-primary btn-block" type="button">Salvar nova senha</button>
-  </div>
-</section>
+    mostrarErro('auth-login-error', 'Não encontramos seu cadastro. Tente novamente ou fale com seu gestor.');
+    mostrarSomenteEsteScreen('screen-auth-login');
+    return;
+  }
 
-<!-- ============================================================
-     CADASTRO
-     ============================================================ -->
-<section id="screen-auth-signup" class="screen screen-welcome hidden" aria-label="Criar conta">
-  <div class="welcome-card">
-    <button id="btn-back-login" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
-    <h1 style="font-size:22px;">Criar minha conta</h1>
-    <p id="auth-signup-error" class="auth-error hidden"></p>
+  if (!perfil.approved) {
+    mostrarSomenteEsteScreen('screen-auth-pending');
+    return;
+  }
 
-    <label class="field">
-      <span>Seu nome</span>
-      <input type="text" id="signup-name" placeholder="Seu nome" maxlength="40">
-    </label>
-    <label class="field">
-      <span>Código da empresa</span>
-      <input type="text" id="signup-company-code" placeholder="Código que seu gestor te passou">
-    </label>
-    <label class="field">
-      <span>E-mail</span>
-      <input type="email" id="signup-email" placeholder="seu@email.com" autocomplete="username">
-    </label>
-    <label class="field">
-      <span>Senha</span>
-      <input type="password" id="signup-password" placeholder="Crie uma senha" autocomplete="new-password">
-    </label>
+  // Aprovado! Segue o fluxo normal do app (tela de boas-vindas / app principal).
+  window.meuDiaPerfil = { ...perfil, id: usuario.id };
+  const itemAprovacoes = document.getElementById('more-manager-approvals');
+  if (itemAprovacoes) itemAprovacoes.classList.toggle('hidden', perfil.role !== 'manager');
+  const itemTarefasEquipe = document.getElementById('more-team-tasks');
+  if (itemTarefasEquipe) itemTarefasEquipe.classList.toggle('hidden', perfil.role !== 'manager');
 
-    <button id="btn-signup-submit" class="btn btn-primary btn-block">Cadastrar</button>
-  </div>
-</section>
+  await sincronizarCategoriasDoServidor(perfil.company_id);
+  await sincronizarAtividadesDoServidor();
+  await sincronizarRotinasDoServidor();
+  const rotinasLocais = JSON.parse(localStorage.getItem('meudia_routines') || '[]');
+  await sincronizarCompletionsDoServidor(rotinasLocais);
+  await carregarMembrosDaEmpresa();
 
-<!-- ============================================================
-     AGUARDANDO APROVAÇÃO
-     ============================================================ -->
-<section id="screen-auth-pending" class="screen screen-welcome hidden" aria-label="Aguardando aprovação">
-  <div class="welcome-card">
-    <h1 style="font-size:22px;">Quase lá!</h1>
-    <p class="welcome-text">
-      Sua conta foi criada. Agora é só esperar seu gestor aprovar seu acesso —
-      assim que isso acontecer, você já pode usar o Meu Dia normalmente.
-    </p>
-    <button id="btn-check-approval" class="btn btn-primary btn-block">Verificar novamente</button>
-    <button id="btn-logout-pending" class="btn btn-secondary btn-block" type="button" style="margin-top:10px;">Sair</button>
-  </div>
-</section>
+  // Se a pessoa já passou pela tela de boas-vindas antes (em qualquer sessão
+  // anterior), pula direto pro app — atualizar a página não deve "resetar"
+  // a tela pra ela ter que apertar Começar/Pular de novo.
+  let jaOnboarded = false;
+  try {
+    const settings = JSON.parse(localStorage.getItem('meudia_settings') || '{}');
+    jaOnboarded = !!settings.onboarded;
+  } catch (e) { /* ignora */ }
 
-<!-- ============================================================
-     TELA DE BOAS-VINDAS (etapa 1 — intro, sozinha)
-     ============================================================ -->
-<section id="screen-welcome" class="screen screen-welcome hidden" aria-label="Boas-vindas">
-  <div class="welcome-card welcome-card-intro">
-    <button id="btn-skip-onboarding" class="skip-link" type="button">Pular</button>
+  if (jaOnboarded) {
+    ['screen-auth-login', 'screen-auth-signup', 'screen-auth-pending', 'screen-welcome', 'screen-auth-forgot', 'screen-auth-reset']
+      .forEach((id) => document.getElementById(id).classList.add('hidden'));
+    document.getElementById('app').classList.remove('hidden');
+  } else {
+    mostrarSomenteEsteScreen('screen-welcome');
+  }
+  if (window.iniciarAppMeuDia) window.iniciarAppMeuDia();
+}
 
-    <img src="illustrations/boas-vindas.png" alt="" class="welcome-illustration">
+// -----------------------------------------------------------
+// Categorias: sincronização com o Supabase (compartilhadas por empresa)
+// -----------------------------------------------------------
+async function sincronizarCategoriasDoServidor(companyId) {
+  const { data, error } = await supabaseClient
+    .from('categories')
+    .select('id, name, color')
+    .eq('company_id', companyId);
+  if (!error && data) {
+    localStorage.setItem('meudia_categories', JSON.stringify(data));
+  }
+}
 
-    <h1>Bem-vinda ao Meu Dia</h1>
-    <p class="welcome-text">
-      Um espaço simples para organizar suas atividades, compromissos e rotinas —
-      sem pressão, sem excesso de informação. Você decide o que aparece e quando.
-    </p>
+window.sincronizarCategoriasNoServidor = async function sincronizarCategoriasNoServidor(categoriasLocais) {
+  if (!window.meuDiaPerfil || !window.meuDiaPerfil.company_id) return;
+  const companyId = window.meuDiaPerfil.company_id;
 
-    <button id="btn-goto-profile" class="btn btn-primary btn-block">Começar</button>
-  </div>
-</section>
+  const linhas = categoriasLocais.map((c) => ({ id: c.id, company_id: companyId, name: c.name, color: c.color }));
+  if (linhas.length > 0) {
+    await supabaseClient.from('categories').upsert(linhas);
+  }
 
-<!-- ============================================================
-     TELA DE BOAS-VINDAS (etapa 2 — nome e categorias)
-     ============================================================ -->
-<section id="screen-welcome-profile" class="screen screen-welcome hidden" aria-label="Seu perfil">
-  <div class="welcome-card">
-    <button id="btn-back-intro" class="btn-back" type="button" style="padding-top:0;">← Voltar</button>
-    <h1 style="font-size:22px;">Como podemos te chamar?</h1>
+  const idsLocais = categoriasLocais.map((c) => c.id);
+  // MESMA TRAVA de segurança das outras sincronizações: se a lista local
+  // estiver vazia, nunca apaga nada — aqui seria ainda pior, porque apagaria
+  // as categorias de TODA a empresa de uma vez, não só de uma pessoa.
+  if (idsLocais.length === 0) return;
+  await supabaseClient.from('categories').delete().eq('company_id', companyId)
+    .not('id', 'in', `(${idsLocais.join(',')})`);
+};
 
-    <label class="field" style="margin-top:18px;">
-      <span>Seu nome <span class="optional">(opcional)</span></span>
-      <input type="text" id="onboard-name" placeholder="Seu nome" aria-label="Seu nome" maxlength="40">
-    </label>
+// -----------------------------------------------------------
+// Atividades: sincronização com o Supabase
+// -----------------------------------------------------------
+function atividadeParaLinha(a, companyId, meuId) {
+  return {
+    id: a.id,
+    company_id: companyId,
+    created_by: a.createdBy || meuId,
+    assigned_to: a.assignedTo || meuId,
+    title: a.title,
+    type: a.type || 'tarefa',
+    priority: a.priority || null,
+    category_id: a.category || null,
+    description: a.description || null,
+    notes: a.notes || null,
+    date: a.date,
+    time: a.time || null,
+    end_time: a.endTime || null,
+    subtasks: a.subtasks || [],
+    focus_enabled: !!a.focusModeAllowed,
+    status: a.completed ? 'concluida' : 'pendente',
+    completed_at: a.completed ? new Date().toISOString() : null,
+    extra: { order: a.order || 0, reminderMinutes: a.reminderMinutes || null, reminderCustom: a.reminderCustom || null }
+  };
+}
 
-    <fieldset class="field">
-      <legend>Quais áreas fazem mais parte do seu dia a dia? <span class="optional">(opcional)</span></legend>
-      <div class="chip-group" id="onboard-categories">
-        <button type="button" class="chip" data-cat="Trabalho">Trabalho</button>
-        <button type="button" class="chip" data-cat="Casa">Casa</button>
-        <button type="button" class="chip" data-cat="Saúde">Saúde</button>
-        <button type="button" class="chip" data-cat="Estudos">Estudos</button>
-        <button type="button" class="chip" data-cat="Lazer">Lazer</button>
-        <button type="button" class="chip" data-cat="Pessoal">Pessoal</button>
-      </div>
-    </fieldset>
+// O Supabase devolve o horário como "23:20:00" (com segundos); o app usa
+// sempre "23:20" — corta os segundos assim que os dados chegam do servidor,
+// pra não aparecer feio em nenhuma tela.
+function cortarSegundos(hhmmss) {
+  return (hhmmss && hhmmss.length > 5) ? hhmmss.slice(0, 5) : (hhmmss || '');
+}
 
-    <label class="field field-inline">
-      <input type="checkbox" id="onboard-notifications">
-      <span>Quero ativar lembretes e notificações</span>
-    </label>
+function linhaParaAtividade(r) {
+  return {
+    id: r.id, title: r.title, description: r.description || '', date: r.date,
+    time: cortarSegundos(r.time), endTime: cortarSegundos(r.end_time), category: r.category_id || '',
+    priority: r.priority || 'media', type: r.type || 'tarefa',
+    reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
+    subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
+    completed: r.status === 'concluida', order: r.extra?.order || 0,
+    createdAt: new Date(r.created_at).getTime(),
+    assignedTo: r.assigned_to, createdBy: r.created_by
+  };
+}
 
-    <button id="btn-start" class="btn btn-primary btn-block">Concluir</button>
-  </div>
-</section>
+async function sincronizarAtividadesDoServidor() {
+  // A agenda pessoal (Hoje/Amanhã/Calendário) mostra só as atividades da PRÓPRIA pessoa,
+  // mesmo para o gestor — a visão de toda a equipe é uma tela separada (Aprovar colaboradores
+  // hoje; um painel de acompanhamento da equipe pode vir depois).
+  const meuId = window.meuDiaPerfil ? window.meuDiaPerfil.id : null;
+  if (!meuId) return;
+  // IMPORTANTE: exclui type='rotina' aqui — rotina tem sua própria sincronização
+  // (sincronizarRotinasDoServidor, logo abaixo) e sua própria lista local
+  // (meudia_routines). Sem esse filtro, toda rotina também caía nessa lista de
+  // tarefas avulsas (meudia_activities) e aparecia duplicada na tela "Hoje": uma
+  // vez como rotina de verdade, outra vez como se fosse uma tarefa criada do
+  // zero — e essa cópia "vazada" ainda era empurrada pra hoje todo dia pelo
+  // rolamento automático de pendentes, parecendo reaparecer sozinha.
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('*')
+    .eq('assigned_to', meuId)
+    .neq('type', 'rotina')
+    .order('date', { ascending: true });
+  if (!error && data) {
+    localStorage.setItem('meudia_activities', JSON.stringify(data.map(linhaParaAtividade)));
+  }
+}
 
-<!-- ============================================================
-     APP PRINCIPAL
-     ============================================================ -->
-<div id="app" class="app hidden">
+window.sincronizarAtividadesNoServidor = async function sincronizarAtividadesNoServidor(atividadesLocais) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
 
-  <!-- Cabeçalho -->
-  <header class="app-header">
-    <div>
-      <p class="greeting" id="greeting-text">Olá</p>
-      <p class="today-date" id="header-date"></p>
-    </div>
-    <div class="app-header-actions">
-      <button id="btn-header-add" class="btn btn-primary btn-header-add" type="button">＋ Nova atividade</button>
-      <button id="btn-settings" class="icon-btn" aria-label="Abrir configurações"><img class="settings-icon settings-icon-btn" src="icons/menu/configuracoes.png" alt=""></button>
-    </div>
-  </header>
+  const linhas = atividadesLocais.map((a) => atividadeParaLinha(a, companyId, meuId));
+  if (linhas.length > 0) {
+    const { error: erroUpsert } = await supabaseClient.from('activities').upsert(linhas);
+    if (erroUpsert) {
+      console.error('Falha ao salvar atividades no servidor:', erroUpsert);
+      return { ok: false, error: erroUpsert.message };
+    }
+  }
 
-  <!-- ================= TELA: HOJE ================= -->
-  <section id="screen-today" class="screen view active" aria-label="Hoje">
-    <div class="today-grid">
-      <div class="today-main">
-        <div id="next-appointment" class="next-appointment hidden"></div>
+  const idsLocais = atividadesLocais.map((a) => a.id);
+  // Só apaga no servidor as atividades que EU criei E que são minhas mesmo (autoatribuídas)
+  // e que sumiram localmente — nunca mexe em tarefas que atribuí a outras pessoas.
+  // IMPORTANTE: .neq('type', 'rotina') aqui é essencial — essa função só deve mexer em
+  // tarefas avulsas. Rotina tem sua própria sincronização/exclusão (sincronizarRotinasNoServidor,
+  // mais abaixo). Sem esse filtro, uma rotina que por engano não estivesse na lista local de
+  // atividades passada aqui seria apagada de vez do banco de dados — foi exatamente isso que
+  // causou a perda de "RESPONSABILIDADES PRINCIPAIS" e "ACOMPANHAMENTO DE PESSOAS".
+  // IMPORTANTE 2: se a lista local estiver vazia (idsLocais.length === 0), NÃO apaga nada —
+  // uma lista vazia quase sempre é sinal de algo ainda carregando ou de uma falha momentânea,
+  // nunca prova de que a pessoa apagou tudo de propósito. Sem essa trava, uma lista local vazia
+  // vira "apague tudo que essa pessoa tem no servidor" (foi isso que apagou TODAS as rotinas da
+  // Vanessa de uma vez). Só apaga quando dá pra comparar com uma lista de verdade.
+  if (idsLocais.length === 0) return { ok: true };
+  const { error: erroDelete } = await supabaseClient.from('activities').delete()
+    .eq('created_by', meuId).eq('assigned_to', meuId).neq('type', 'rotina')
+    .not('id', 'in', `(${idsLocais.join(',')})`);
+  if (erroDelete) {
+    console.error('Falha ao limpar atividades removidas no servidor:', erroDelete);
+    return { ok: false, error: erroDelete.message };
+  }
+  return { ok: true };
+};
 
-        <div class="progress-block">
-          <div class="progress-block-header">
-            <span>Seu progresso hoje</span>
-            <strong id="today-progress-count">0 de 0</strong>
-          </div>
-          <div class="progress-bar-track">
-            <div id="today-progress-bar" class="progress-bar-fill"></div>
-          </div>
-          <p class="progress-label" id="today-progress-label">0 de 0 concluídas</p>
-        </div>
+// -----------------------------------------------------------
+// Nome do perfil: o campo "Como podemos te chamar?" nas Configurações
+// mexia só num apelido guardado NO APARELHO (usado na saudação "Boa
+// noite, Fulano"), sem nunca atualizar o nome de verdade no banco de
+// dados — por isso a pessoa mudava o nome, mas continuava aparecendo
+// errado (ex: "Colaborador Teste") na lista de responsáveis que o
+// gestor vê. Essa função atualiza o nome oficial no servidor também.
+// -----------------------------------------------------------
+window.atualizarNomePerfil = async function atualizarNomePerfil(novoNome) {
+  if (!window.meuDiaPerfil || !novoNome || !novoNome.trim()) return { ok: false, error: 'sem perfil ou nome vazio' };
+  const nome = novoNome.trim();
+  const { error } = await supabaseClient.from('profiles').update({ name: nome }).eq('id', window.meuDiaPerfil.id);
+  if (error) {
+    console.error('Falha ao atualizar nome do perfil:', error);
+    return { ok: false, error: error.message };
+  }
+  window.meuDiaPerfil.name = nome;
+  return { ok: true };
+};
 
-        <div id="today-priorities" class="priorities-block hidden">
-          <h2 class="section-title">Prioridades de hoje</h2>
-          <div id="today-priorities-list" class="priority-list"></div>
-        </div>
+// -----------------------------------------------------------
+// Notificação push: guarda a "inscrição" deste aparelho (celular/PC),
+// associada à pessoa logada, pra o servidor conseguir mandar avisos
+// mesmo com o app fechado (ver Edge Function "send-reminders").
+// -----------------------------------------------------------
+window.salvarInscricaoPush = async function salvarInscricaoPush(subscription) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const json = subscription.toJSON();
+  if (!json.endpoint || !json.keys) return { ok: false, error: 'inscrição inválida' };
+  const { error } = await supabaseClient.from('push_subscriptions').upsert({
+    user_id: window.meuDiaPerfil.id,
+    endpoint: json.endpoint,
+    p256dh: json.keys.p256dh,
+    auth: json.keys.auth
+  }, { onConflict: 'endpoint' });
+  if (error) {
+    console.error('Falha ao salvar inscrição push:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+};
 
-        <div class="list-toolbar">
-          <input type="search" id="today-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de hoje">
-          <button id="btn-toggle-done-today" class="btn btn-ghost btn-small">Ocultar concluídas</button>
-        </div>
+// -----------------------------------------------------------
+// Edição pelo gestor de uma atividade/rotina de um colaborador, feita a
+// partir da tela "Agenda de [colaborador]" — grava só esse item direto no
+// servidor (mesma linha/tabela de sempre), sem mexer no state.activities/
+// state.routines de quem está logado, que é só a agenda PESSOAL dele.
+// -----------------------------------------------------------
+window.salvarEdicaoItemMembro = async function salvarEdicaoItemMembro(item, isRoutine) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
+  const linha = isRoutine ? rotinaParaLinha(item, companyId, meuId) : atividadeParaLinha(item, companyId, meuId);
+  const { error } = await supabaseClient.from('activities').upsert(linha);
+  if (error) {
+    console.error('Falha ao salvar edição de item do colaborador:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+};
 
-        <h2 class="section-title">Pendentes</h2>
-        <ul id="today-pending-list" class="activity-list"></ul>
-        <p id="today-empty" class="empty-state hidden">Nenhuma atividade por aqui. Que tal adicionar algo com o botão “+”?</p>
+// Exclui uma atividade avulsa ou rotina inteira de um colaborador, direto
+// pelo id da linha (mesma tabela "activities" de sempre) — usado quando o
+// gestor precisa apagar algo que atribuiu errado (pessoa errada, duplicado
+// etc.) pela tela "Agenda de [colaborador]".
+window.excluirItemMembro = async function excluirItemMembro(id) {
+  const { error } = await supabaseClient.from('activities').delete().eq('id', id);
+  if (error) {
+    console.error('Falha ao excluir item do colaborador:', error);
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+};
 
-        <h2 class="section-title">Concluídas</h2>
-        <ul id="today-done-list" class="activity-list"></ul>
+// -----------------------------------------------------------
+// Rotinas: sincronização com o Supabase.
+// Rotinas usam a MESMA tabela "activities" (type = 'rotina'), guardando
+// a regra de repetição inteira dentro da coluna jsonb "recurrence".
+// As conclusões dia a dia ficam em "activity_occurrences" (ver mais abaixo).
+// -----------------------------------------------------------
+function rotinaParaLinha(r, companyId, meuId) {
+  return {
+    id: r.id,
+    company_id: companyId,
+    created_by: r.createdBy || meuId,
+    assigned_to: r.assignedTo || meuId,
+    title: r.title,
+    type: 'rotina',
+    priority: r.priority || null,
+    category_id: r.category || null,
+    description: r.description || null,
+    notes: r.notes || null,
+    date: r.startDate,
+    time: r.time || null,
+    end_time: r.endTime || null,
+    subtasks: r.subtasks || [],
+    focus_enabled: !!r.focusModeAllowed,
+    status: 'pendente',
+    recurrence: {
+      recurrence: r.recurrence, days: r.days || [], interval: r.interval || null,
+      startDate: r.startDate, endDate: r.endDate || '', active: r.active !== false,
+      paused: !!r.paused, skipDates: r.skipDates || []
+    },
+    extra: { reminderMinutes: r.reminderMinutes || null, reminderCustom: r.reminderCustom || null }
+  };
+}
 
-        <p class="quote-box"><span class="qb-icon">🌿</span><span id="today-quote">Disciplina de hoje, conquistas de amanhã.</span></p>
-      </div>
+function linhaParaRotina(r) {
+  const rec = r.recurrence || {};
+  return {
+    id: r.id, title: r.title, description: r.description || '',
+    time: cortarSegundos(r.time), endTime: cortarSegundos(r.end_time), category: r.category_id || '',
+    priority: r.priority || 'media', type: 'rotina',
+    reminderMinutes: r.extra?.reminderMinutes ?? null, reminderCustom: r.extra?.reminderCustom ?? '',
+    subtasks: r.subtasks || [], notes: r.notes || '', focusModeAllowed: !!r.focus_enabled,
+    recurrence: rec.recurrence || 'daily', days: rec.days || [], interval: rec.interval || null,
+    startDate: rec.startDate || r.date, endDate: rec.endDate || '',
+    active: rec.active !== false, paused: !!rec.paused, skipDates: rec.skipDates || [],
+    createdAt: new Date(r.created_at).getTime(),
+    assignedTo: r.assigned_to, createdBy: r.created_by
+  };
+}
 
-      <aside class="today-side">
-        <div class="side-card">
-          <div class="side-card-head">
-            <button id="mini-cal-prev" class="icon-btn icon-btn-small" type="button" aria-label="Mês anterior">‹</button>
-            <strong id="mini-cal-label"></strong>
-            <button id="mini-cal-next" class="icon-btn icon-btn-small" type="button" aria-label="Próximo mês">›</button>
-          </div>
-          <div id="mini-cal-grid" class="mini-cal-grid"></div>
-        </div>
-        <div class="side-card">
-          <h2 class="section-title" style="margin-top:0;">Próximas atividades</h2>
-          <div id="upcoming-list"></div>
-        </div>
-      </aside>
-    </div>
-  </section>
+async function sincronizarRotinasDoServidor() {
+  const meuId = window.meuDiaPerfil ? window.meuDiaPerfil.id : null;
+  if (!meuId) return;
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('*')
+    .eq('type', 'rotina')
+    .eq('assigned_to', meuId);
+  if (!error && data) {
+    localStorage.setItem('meudia_routines', JSON.stringify(data.map(linhaParaRotina)));
+  }
+}
 
-  <!-- ================= TELA: AMANHÃ ================= -->
-  <section id="screen-tomorrow" class="screen view" aria-label="Amanhã">
-    <p class="tomorrow-date" id="tomorrow-date"></p>
-    <div class="list-toolbar">
-      <input type="search" id="tomorrow-search" class="search-input" placeholder="Buscar atividade..." aria-label="Buscar atividade de amanhã">
-    </div>
-    <ul id="tomorrow-list" class="activity-list" data-sortable="true"></ul>
-    <p id="tomorrow-empty" class="empty-state hidden">Nada planejado para amanhã ainda.</p>
-    <p class="quote-box"><span class="qb-icon">🌅</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
-  </section>
+window.sincronizarRotinasNoServidor = async function sincronizarRotinasNoServidor(rotinasLocais) {
+  if (!window.meuDiaPerfil) return { ok: false, error: 'sem perfil' };
+  const companyId = window.meuDiaPerfil.company_id;
+  const meuId = window.meuDiaPerfil.id;
 
-  <!-- ================= TELA: CALENDÁRIO ================= -->
-  <section id="screen-calendar" class="screen view" aria-label="Calendário">
-    <div class="calendar-toolbar">
-      <div class="segmented" id="calendar-mode">
-        <button class="segmented-btn active" data-mode="month">Mês</button>
-        <button class="segmented-btn" data-mode="week">Semana</button>
-      </div>
-      <div class="calendar-nav">
-        <button id="cal-prev" class="icon-btn" aria-label="Período anterior">‹</button>
-        <span id="cal-label" class="cal-label"></span>
-        <button id="cal-next" class="icon-btn" aria-label="Próximo período">›</button>
-      </div>
-    </div>
+  const linhas = rotinasLocais.map((r) => rotinaParaLinha(r, companyId, meuId));
+  if (linhas.length > 0) {
+    const { error: erroUpsert } = await supabaseClient.from('activities').upsert(linhas);
+    if (erroUpsert) {
+      console.error('Falha ao salvar rotinas no servidor:', erroUpsert);
+      return { ok: false, error: erroUpsert.message };
+    }
+  }
 
-    <div class="filters-row" id="calendar-filters">
-      <select id="filter-category" aria-label="Filtrar por categoria">
-        <option value="">Categoria: todas</option>
-      </select>
-      <select id="filter-priority" aria-label="Filtrar por prioridade">
-        <option value="">Prioridade: todas</option>
-        <option value="alta">Alta</option>
-        <option value="media">Média</option>
-        <option value="baixa">Baixa</option>
-      </select>
-      <select id="filter-status" aria-label="Filtrar por situação">
-        <option value="">Situação: todas</option>
-        <option value="pendente">Pendentes</option>
-        <option value="concluida">Concluídas</option>
-      </select>
-    </div>
+  const idsLocais = rotinasLocais.map((r) => r.id);
+  // MESMA TRAVA da sincronização de atividades: se a lista local de rotinas
+  // estiver vazia, NUNCA apaga nada no servidor. Sem essa trava, uma lista
+  // vazia (por exemplo, um instante em que o aparelho ainda não tinha
+  // carregado as rotinas direito) virava "apague TODAS as rotinas dessa
+  // pessoa" — foi exatamente isso que apagou de uma vez todas as rotinas
+  // da Vanessa. Só apaga quando existe uma lista de verdade pra comparar.
+  if (idsLocais.length === 0) return { ok: true };
+  const { error: erroDelete } = await supabaseClient.from('activities').delete()
+    .eq('type', 'rotina').eq('created_by', meuId).eq('assigned_to', meuId)
+    .not('id', 'in', `(${idsLocais.join(',')})`);
+  if (erroDelete) {
+    console.error('Falha ao limpar rotinas removidas no servidor:', erroDelete);
+    return { ok: false, error: erroDelete.message };
+  }
+  return { ok: true };
+};
 
-    <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Grade do calendário"></div>
+// -----------------------------------------------------------
+// Conclusões de ocorrências de rotina (uma linha por rotina + data)
+// -----------------------------------------------------------
+async function sincronizarCompletionsDoServidor(rotinasLocais) {
+  const idsRotinas = rotinasLocais.map((r) => r.id);
+  if (idsRotinas.length === 0) {
+    localStorage.setItem('meudia_completions', JSON.stringify({}));
+    return;
+  }
+  const { data, error } = await supabaseClient
+    .from('activity_occurrences')
+    .select('activity_id, occurrence_date, completed, subtasks_state')
+    .in('activity_id', idsRotinas);
+  if (!error && data) {
+    const completions = {};
+    data.forEach((o) => {
+      const chave = o.activity_id + '|' + o.occurrence_date;
+      completions[chave] = { done: !!o.completed, subtasksDone: o.subtasks_state || {} };
+    });
+    localStorage.setItem('meudia_completions', JSON.stringify(completions));
+  }
+}
 
-    <h2 class="section-title" id="calendar-day-title">Selecione um dia</h2>
-    <ul id="calendar-day-list" class="activity-list"></ul>
-    <p class="quote-box"><span class="qb-icon">🗓️</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
-  </section>
+window.sincronizarCompletionsNoServidor = async function sincronizarCompletionsNoServidor(completionsLocais) {
+  if (!window.meuDiaPerfil) return;
+  const meuId = window.meuDiaPerfil.id;
+  const chaves = Object.keys(completionsLocais);
+  if (chaves.length === 0) return;
 
-  <!-- ================= TELA: PENDENTES ================= -->
-  <section id="screen-pending" class="screen view" aria-label="Pendentes">
-    <div class="filter-pills" id="pending-filter-pills">
-      <button class="filter-pill active" data-filter="todos">Todos</button>
-      <button class="filter-pill" data-filter="atrasadas">Atrasadas</button>
-      <button class="filter-pill" data-filter="sem-data">Sem data</button>
-    </div>
-    <div id="pending-overdue-banner" class="overdue-banner hidden">
-      <span class="ob-icon">⏰</span>
-      <div><strong>Você tem tarefas em aberto</strong><span>Tudo bem! Reorganize e siga em frente.</span></div>
-    </div>
-    <ul id="pending-list" class="activity-list"></ul>
-    <p id="pending-empty" class="empty-state hidden">Você está em dia — nenhuma pendência antiga. 🌿</p>
-  </section>
+  const linhas = chaves.map((chave) => {
+    const [activityId, occurrenceDate] = chave.split('|');
+    const comp = completionsLocais[chave];
+    return {
+      activity_id: activityId,
+      occurrence_date: occurrenceDate,
+      completed: !!comp.done,
+      completed_by: meuId,
+      completed_at: comp.done ? new Date().toISOString() : null,
+      subtasks_state: comp.subtasksDone || {}
+    };
+  });
+  await supabaseClient.from('activity_occurrences').upsert(linhas, { onConflict: 'activity_id,occurrence_date' });
+};
 
-  <!-- ================= TELA: ROTINAS ================= -->
-  <section id="screen-routines" class="screen view" aria-label="Rotinas">
-    <p class="hint-text">Pequenas ações, grandes resultados.</p>
-    <button id="btn-new-routine" class="btn btn-secondary btn-block" style="margin-bottom:16px;">+ Nova rotina</button>
-    <ul id="routines-list" class="activity-list"></ul>
-    <p id="routines-empty" class="empty-state hidden">Nenhuma rotina criada ainda.</p>
-    <p class="quote-box"><span class="qb-icon">🌱</span><span>Rotina é o caminho para a vida que você quer.</span></p>
-  </section>
+// -----------------------------------------------------------
+// Lista de colaboradores da empresa (para o gestor atribuir atividades)
+// -----------------------------------------------------------
+async function carregarMembrosDaEmpresa() {
+  const perfil = window.meuDiaPerfil;
+  if (!perfil) return;
 
-  <!-- ================= TELA: MAIS (menu) ================= -->
-  <section id="screen-more" class="screen view" aria-label="Mais">
-    <ul class="more-menu">
-      <li><button class="more-item" data-target="screen-focus-list"><img class="more-icon" src="icons/menu/modo_foco.png" alt=""> <span>Modo Foco</span></button></li>
-      <li><button class="more-item" data-target="screen-progress"><img class="more-icon" src="icons/menu/progresso.png" alt=""> <span>Progresso</span></button></li>
-      <li><button class="more-item" data-target="screen-categories"><img class="more-icon" src="icons/menu/categorias.png" alt=""> <span>Categorias</span></button></li>
-      <li><button class="more-item" id="more-settings"><img class="more-icon" src="icons/menu/configuracoes.png" alt=""> <span>Configurações</span></button></li>
-      <li><button class="more-item hidden" id="more-manager-approvals" data-target="screen-manager-approvals"><img class="more-icon" src="icons/menu/aprovacoes.png" alt=""> <span>Aprovar colaboradores</span></button></li>
-      <li><button class="more-item hidden" id="more-team-tasks" data-target="screen-team-tasks"><img class="more-icon" src="icons/menu/tarefas_da_equipe.png" alt=""> <span>Tarefas atribuídas</span></button></li>
-    </ul>
-  </section>
+  if (perfil.role !== 'manager') {
+    window.meuDiaMembros = [{ id: perfil.id, name: perfil.name }];
+    return;
+  }
 
-  <!-- ================= TELA: MODO FOCO (lista do dia) ================= -->
-  <section id="screen-focus-list" class="screen view" aria-label="Modo Foco">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
-    <p class="hint-text">Atividades de hoje com o Modo Foco permitido. Toque em "Focar" pra abrir o cronômetro — a hora marcada na atividade é só pra lembrete, não abre o foco sozinha.</p>
-    <ul id="lista-modo-foco" class="activity-list"></ul>
-    <p id="modo-foco-empty" class="empty-state hidden">Nenhuma atividade de hoje está com o Modo Foco permitido. Marque "Permitir Modo Foco" ao criar ou editar uma atividade.</p>
-  </section>
+  const { data, error } = await supabaseClient
+    .from('profiles')
+    .select('id, name')
+    .eq('company_id', perfil.company_id)
+    .eq('approved', true)
+    .order('name', { ascending: true });
 
-  <!-- ================= TELA: APROVAR COLABORADORES (só gestor) ================= -->
-  <section id="screen-manager-approvals" class="screen view" aria-label="Aprovar colaboradores">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
-    <p class="hint-text">Colaboradores que se cadastraram com o código da empresa e aguardam liberação.</p>
-    <div id="lista-aprovacoes"></div>
-    <p id="aprovacoes-empty" class="empty-state hidden">Nenhum colaborador pendente no momento.</p>
-  </section>
+  window.meuDiaMembros = (!error && data) ? data : [{ id: perfil.id, name: perfil.name }];
+}
 
-  <!-- ================= TELA: TAREFAS ATRIBUÍDAS À EQUIPE (só gestor) ================= -->
-  <section id="screen-team-tasks" class="screen view" aria-label="Tarefas atribuídas">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
-    <p class="hint-text">Tarefas que você atribuiu aos colaboradores — separadas da sua própria agenda.</p>
+// -----------------------------------------------------------
+// Painel do gestor: tarefas atribuídas aos colaboradores
+// (separado da agenda pessoal dela — vem direto do servidor,
+// nunca do localStorage, que só guarda as tarefas da própria pessoa)
+// -----------------------------------------------------------
+window.renderizarTarefasEquipe = async function renderizarTarefasEquipe() {
+  const lista = document.getElementById('lista-tarefas-equipe');
+  const vazio = document.getElementById('tarefas-equipe-empty');
+  if (!lista || !window.meuDiaPerfil) return;
+  lista.innerHTML = '<p class="hint-text">Carregando...</p>';
 
-    <label class="field">
-      <span>Ver a agenda completa de um colaborador</span>
-      <select id="select-membro-agenda"></select>
-    </label>
-    <button class="btn btn-secondary" id="btn-ver-agenda-membro" type="button" style="margin-bottom:16px;">Ver agenda completa</button>
+  const meuId = window.meuDiaPerfil.id;
+  const { data, error } = await supabaseClient
+    .from('activities')
+    .select('id, title, date, status, assigned_to, created_by')
+    .neq('assigned_to', meuId)
+    .order('date', { ascending: true });
 
-    <div id="lista-tarefas-equipe"></div>
-    <p id="tarefas-equipe-empty" class="empty-state hidden">Nenhuma tarefa atribuída a colaboradores ainda.</p>
-  </section>
+  if (error) {
+    lista.innerHTML = '<p class="hint-text">Não foi possível carregar agora. Tente de novo em instantes.</p>';
+    return;
+  }
 
-  <!-- ================= TELA: AGENDA COMPLETA DE UM COLABORADOR (só gestor) ================= -->
-  <section id="screen-member-agenda" class="screen view" aria-label="Agenda do colaborador">
-    <button class="btn-back" data-back="screen-team-tasks">← Voltar</button>
-    <h2 id="member-agenda-title" style="font-size:20px;margin-bottom:4px;">Agenda</h2>
-    <p class="hint-text">Tudo o que essa pessoa tem na agenda dela, inclusive o que ela mesma criou — só visualização, sem edição por aqui.</p>
-    <div id="member-agenda-list"></div>
-    <p id="member-agenda-empty" class="empty-state hidden">Nada agendado nos próximos dias.</p>
-  </section>
+  if (!data || data.length === 0) {
+    lista.innerHTML = '';
+    vazio.classList.remove('hidden');
+    return;
+  }
+  vazio.classList.add('hidden');
 
-  <!-- ================= TELA: PROGRESSO ================= -->
-  <section id="screen-progress" class="screen view" aria-label="Progresso">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
+  const membros = window.meuDiaMembros || [];
+  const nomePorId = {};
+  membros.forEach((m) => { nomePorId[m.id] = m.name; });
 
-    <div class="progress-donut-card">
-      <div class="donut-wrap">
-        <svg viewBox="0 0 100 100" width="96" height="96" aria-hidden="true">
-          <circle cx="50" cy="50" r="42" fill="none" stroke="var(--petroleo-light)" stroke-width="10"></circle>
-          <circle id="donut-circle" cx="50" cy="50" r="42" fill="none" stroke="var(--petroleo)" stroke-width="10" stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"></circle>
-        </svg>
-        <div class="donut-percent" id="donut-percent">0%</div>
-      </div>
-      <div class="donut-caption">
-        <strong>Tarefas concluídas hoje</strong>
-        <span id="donut-caption-text">0 de 0</span>
-      </div>
-    </div>
+  // Agrupa por colaborador
+  const porPessoa = {};
+  data.forEach((t) => {
+    const nome = nomePorId[t.assigned_to] || 'Colaborador';
+    if (!porPessoa[nome]) porPessoa[nome] = [];
+    porPessoa[nome].push(t);
+  });
 
-    <div class="progress-grid">
-      <div class="stat-card">
-        <p class="stat-number" id="stat-done-today">0</p>
-        <p class="stat-label">concluídas hoje</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-number" id="stat-pending-today">0</p>
-        <p class="stat-label">pendentes hoje</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-number" id="stat-percent-today">0%</p>
-        <p class="stat-label">do dia concluído</p>
-      </div>
-      <div class="stat-card">
-        <p class="stat-number" id="stat-streak">0</p>
-        <p class="stat-label">dias seguidos usando</p>
-      </div>
-    </div>
-
-    <h2 class="section-title">Últimos 7 dias</h2>
-    <div class="week-chart-card">
-      <div id="week-chart" class="week-chart" role="img" aria-label="Gráfico de atividades concluídas nos últimos sete dias"></div>
-    </div>
-
-    <h2 class="section-title">Categorias com mais atividades</h2>
-    <div id="category-ranking" class="category-ranking"></div>
-
-    <p class="encouragement" id="encouragement-msg"></p>
-  </section>
-
-  <!-- ================= TELA: CATEGORIAS ================= -->
-  <section id="screen-categories" class="screen view" aria-label="Categorias">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
-    <button id="btn-new-category" class="btn btn-secondary btn-block">+ Nova categoria</button>
-    <ul id="categories-list" class="category-list"></ul>
-  </section>
-
-  <!-- ================= TELA: CONFIGURAÇÕES ================= -->
-  <section id="screen-settings" class="screen view" aria-label="Configurações">
-    <button class="btn-back" data-back="screen-more">← Voltar</button>
-    <p class="hint-text">Deixe o app com a sua cara.</p>
-
+  lista.innerHTML = Object.keys(porPessoa).sort().map((nome) => `
     <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/seu_nome.png" alt=""> Seu nome</p>
-      <label class="field" style="padding-bottom:14px;">
-        <input type="text" id="settings-name" maxlength="40" placeholder="Como podemos te chamar?">
-      </label>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/aparencia.png" alt=""> Aparência</p>
-      <div class="settings-row">
-        <span>Modo escuro</span>
-        <label class="switch"><input type="checkbox" id="settings-dark"><span class="slider"></span></label>
-      </div>
-      <div class="settings-row">
-        <span>Primeiro dia da semana</span>
-        <select id="settings-first-day" style="width:auto;padding:8px 10px;">
-          <option value="0">Domingo</option>
-          <option value="1">Segunda-feira</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/notificacoes.png" alt=""> Notificações</p>
-      <div class="settings-row">
-        <span>Lembretes de tarefas</span>
-        <label class="switch"><input type="checkbox" id="settings-notifications"><span class="slider"></span></label>
-      </div>
-      <div class="settings-row">
-        <span>Sons</span>
-        <label class="switch"><input type="checkbox" id="settings-sounds"><span class="slider"></span></label>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/categorias.png" alt=""> Categorias</p>
-      <div class="settings-row linklike" id="settings-manage-categories">
-        <span>Gerenciar categorias</span>
-        <span>›</span>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/backup_e_dados.png" alt=""> Backup e dados</p>
-      <div class="settings-row linklike" id="btn-export">
-        <span>Exportar dados (backup)</span>
-        <span>›</span>
-      </div>
-      <div class="settings-row linklike file-btn" style="padding:0;">
-        <label style="display:flex;align-items:center;justify-content:space-between;width:100%;padding:13px 0;cursor:pointer;">
-          <span>Importar dados</span>
-          <span>›</span>
-          <input type="file" id="btn-import" accept="application/json" hidden>
-        </label>
-      </div>
-      <div class="settings-row linklike" id="btn-clear-data" style="color:#B0392A;">
-        <span>Apagar todos os dados</span>
-        <span>›</span>
-      </div>
-    </div>
-
-    <div class="settings-section">
-      <p class="settings-section-title"><img class="settings-icon" src="icons/menu/conta.png" alt=""> Conta</p>
-      <div class="settings-row linklike" id="btn-logout" style="color:#B0392A;">
-        <span>Sair</span>
-        <span>›</span>
-      </div>
-    </div>
-
-    <details class="info-details">
-      <summary>Sobre privacidade</summary>
-      <p>Todos os seus dados ficam salvos apenas neste dispositivo, no armazenamento local do navegador (LocalStorage). Nada é enviado para nenhum servidor.</p>
-    </details>
-    <details class="info-details">
-      <summary>Limitações dos lembretes</summary>
-      <p>Como este é um aplicativo web, os lembretes funcionam enquanto o app estiver aberto ou em segundo plano no navegador. Com o app totalmente fechado, o navegador pode não conseguir disparar notificações — assim como qualquer site. Para lembretes confiáveis mesmo fechado, veja a opção "Levar para o celular" no menu Mais.</p>
-    </details>
-
-    <p class="quote-box" style="margin-top:16px;"><span class="qb-icon">⚙️</span><span>Organização de hoje, para um amanhã mais leve.</span></p>
-  </section>
-
-  <!-- Botão flutuante de adicionar -->
-  <button id="fab-add" class="fab" aria-label="Adicionar atividade">+</button>
-
-  <!-- Menu inferior -->
-  <nav class="bottom-nav" aria-label="Navegação principal">
-    <div class="nav-brand">
-      <img src="icons/icon-192.png" alt="" class="nav-brand-icon">
-      <span class="nav-brand-text">Meu Dia</span>
-    </div>
-    <button class="nav-item active" data-screen="screen-today">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.3V21h5v-6h3v6h5V10.3"/></svg></span>
-      <span>Hoje</span>
-    </button>
-    <button class="nav-item" data-screen="screen-tomorrow">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 1.8v2.1M12 20.1v2.1M1.8 12h2.1M20.1 12h2.1M4.8 4.8l1.5 1.5m11.4 11.4 1.5 1.5M19.2 4.8l-1.5 1.5M6.3 17.7l-1.5 1.5"/></svg></span>
-      <span>Amanhã</span>
-    </button>
-    <button class="nav-item" data-screen="screen-calendar">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="16" rx="2"/><path d="M7.5 2.5v6M16.5 2.5v6M3.5 10h17"/><path d="M7.8 13.8h.1m4.1 0h.1m4.1 0h.1m-8.4 3.8h.1m4.1 0h.1m4.1 0h.1" stroke-linecap="round" stroke-width="2.4"/></svg></span>
-      <span>Calendário</span>
-    </button>
-    <button class="nav-item" data-screen="screen-routines">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h12M9 12h12M9 19h12"/><circle cx="4" cy="5" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="4" cy="19" r="1" fill="currentColor" stroke="none"/></svg></span>
-      <span>Rotinas</span>
-    </button>
-    <button class="nav-item" data-screen="screen-more">
-      <span class="nav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg></span>
-      <span>Mais</span>
-    </button>
-  </nav>
-</div>
-
-<!-- ============================================================
-     MODAL: CADASTRO / EDIÇÃO DE ATIVIDADE
-     ============================================================ -->
-<div id="modal-activity" class="modal-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="activity-modal-title">
-  <div class="modal-sheet">
-    <div class="modal-header">
-      <h2 id="activity-modal-title">Nova atividade</h2>
-      <button class="icon-btn" id="btn-close-activity" aria-label="Fechar">✕</button>
-    </div>
-    <form id="form-activity" class="modal-body">
-      <input type="hidden" id="act-id">
-
-      <label class="field">
-        <span>Título <span class="required">*</span></span>
-        <input type="text" id="act-title" required maxlength="80" aria-required="true">
-      </label>
-      <p class="field-error hidden" id="act-title-error">Digite um título para salvar a atividade.</p>
-
-      <label class="field">
-        <span>Descrição <span class="optional">(opcional)</span></span>
-        <textarea id="act-description" rows="2" maxlength="300"></textarea>
-      </label>
-
-      <div class="field">
-        <span>Tipo</span>
-        <div class="chip-group" id="act-type-chips">
-          <button type="button" class="chip" data-value="tarefa">Tarefa</button>
-          <button type="button" class="chip" data-value="compromisso">Compromisso</button>
-          <button type="button" class="chip" data-value="reuniao">Reunião</button>
-          <button type="button" class="chip" data-value="lembrete">Lembrete</button>
-          <button type="button" class="chip" data-value="rotina">Rotina</button>
+      <p class="settings-section-title">👤 ${nome}</p>
+      ${porPessoa[nome].map((t) => `
+        <div class="settings-row" style="align-items:center;">
+          <span style="${t.status === 'concluida' ? 'text-decoration:line-through;color:#8A8A8A;' : ''}">
+            ${t.created_by === t.assigned_to ? '' : '📋 '}${t.title}
+          </span>
+          <span style="font-size:13px;color:#8A8A8A;">${t.status === 'concluida' ? '✓ Concluída' : dataCurtaSimples(t.date)}</span>
         </div>
-        <input type="hidden" id="act-type" value="tarefa">
-      </div>
-
-      <div class="field">
-        <span>Prioridade</span>
-        <div class="priority-chip-group" id="act-priority-chips">
-          <button type="button" class="priority-chip" data-value="baixa">Baixa</button>
-          <button type="button" class="priority-chip" data-value="media">Média</button>
-          <button type="button" class="priority-chip" data-value="alta">Alta</button>
-        </div>
-        <input type="hidden" id="act-priority" value="media">
-      </div>
-
-      <div class="field-row">
-        <label class="field">
-          <span>Data</span>
-          <input type="date" id="act-date">
-        </label>
-        <label class="field">
-          <span>Categoria <span class="optional">(opcional)</span></span>
-          <select id="act-category">
-            <option value="">Sem categoria</option>
-          </select>
-        </label>
-      </div>
-
-      <div class="field hidden" id="act-assignee-row">
-        <span>Responsável (pode marcar mais de um)</span>
-        <div id="act-assignee-list" class="checkbox-list"></div>
-      </div>
-
-      <label class="field field-inline">
-        <input type="checkbox" id="act-has-time">
-        <span>Definir horário para esta atividade</span>
-      </label>
-
-      <div class="field-row hidden" id="act-time-row">
-        <label class="field">
-          <span>Horário</span>
-          <input type="time" id="act-time">
-        </label>
-        <label class="field">
-          <span>Término <span class="optional">(opcional)</span></span>
-          <input type="time" id="act-end-time">
-        </label>
-      </div>
-
-      <div id="act-reminder-block" class="field hidden">
-        <span>Lembrete</span>
-        <select id="act-reminder">
-          <option value="">Sem lembrete</option>
-          <option value="0">Avisar no horário</option>
-          <option value="5">5 minutos antes</option>
-          <option value="10">10 minutos antes</option>
-          <option value="15">15 minutos antes</option>
-          <option value="30">30 minutos antes</option>
-          <option value="60">1 hora antes</option>
-          <option value="custom">Horário personalizado</option>
-        </select>
-        <input type="time" id="act-reminder-custom" class="hidden" aria-label="Horário personalizado do lembrete">
-      </div>
-
-      <div id="act-recurrence-block" class="field">
-        <span>Repetição <span class="optional">(opcional)</span></span>
-        <select id="act-recurrence">
-          <option value="">Não repetir</option>
-          <option value="daily">Todos os dias</option>
-          <option value="weekdays">Apenas dias úteis</option>
-          <option value="weekly">Semanalmente</option>
-          <option value="monthly">Mensalmente</option>
-          <option value="custom-days">Dias específicos da semana</option>
-          <option value="interval">Intervalo personalizado (dias)</option>
-        </select>
-        <div id="recurrence-days" class="chip-group hidden">
-          <button type="button" class="chip" data-day="0">Dom</button>
-          <button type="button" class="chip" data-day="1">Seg</button>
-          <button type="button" class="chip" data-day="2">Ter</button>
-          <button type="button" class="chip" data-day="3">Qua</button>
-          <button type="button" class="chip" data-day="4">Qui</button>
-          <button type="button" class="chip" data-day="5">Sex</button>
-          <button type="button" class="chip" data-day="6">Sáb</button>
-        </div>
-        <input type="number" id="recurrence-interval" class="hidden" min="2" max="60" placeholder="A cada quantos dias?">
-        <label class="field-inline-small hidden" id="recurrence-end-block">
-          <span>Terminar em <span class="optional">(opcional)</span></span>
-          <input type="date" id="recurrence-end">
-        </label>
-      </div>
-
-      <div class="field">
-        <div class="field-label-row">
-          <span>Subtarefas <span class="optional">(opcional)</span></span>
-          <button type="button" id="btn-add-subtask" class="btn btn-ghost btn-small">Dividir em etapas</button>
-        </div>
-        <ul id="act-subtasks-list" class="subtask-edit-list"></ul>
-      </div>
-
-      <label class="field">
-        <span>Observações <span class="optional">(opcional)</span></span>
-        <textarea id="act-notes" rows="2" maxlength="300"></textarea>
-      </label>
-
-      <div class="toggle-row">
-        <div class="tr-text">
-          <span class="tr-title">Permitir Modo Foco</span>
-          <span class="tr-sub">Libera essa atividade pra abrir no cronômetro de foco</span>
-        </div>
-        <label class="switch">
-          <input type="checkbox" id="act-focus-mode">
-          <span class="switch-track"></span>
-        </label>
-      </div>
-
-      <div class="modal-actions">
-        <button type="submit" class="btn btn-primary btn-block">Salvar atividade</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<!-- ============================================================
-     MODAL: AÇÕES DA ATIVIDADE (menu de opções)
-     ============================================================ -->
-<div id="modal-item-actions" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-sheet modal-sheet-small">
-    <div class="modal-header">
-      <h2 id="item-actions-title">Atividade</h2>
-      <button class="icon-btn" id="btn-close-item-actions" aria-label="Fechar">✕</button>
+      `).join('')}
     </div>
-    <div class="modal-body action-menu" id="item-actions-body"></div>
-  </div>
-</div>
+  `).join('');
 
-<!-- ============================================================
-     MODAL: ESCOLHER DATA
-     ============================================================ -->
-<div id="modal-date-picker" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-sheet modal-sheet-small">
-    <div class="modal-header">
-      <h2>Escolher outra data</h2>
-      <button class="icon-btn" id="btn-close-date-picker" aria-label="Fechar">✕</button>
+  // Preenche o seletor "Ver agenda completa de um colaborador"
+  const select = document.getElementById('select-membro-agenda');
+  if (select) {
+    const meuIdSelect = window.meuDiaPerfil.id;
+    const membros = (window.meuDiaMembros || []).filter((m) => m.id !== meuIdSelect);
+    select.innerHTML = membros.length
+      ? membros.map((m) => `<option value="${m.id}">${m.name}</option>`).join('')
+      : '<option value="">Nenhum colaborador aprovado ainda</option>';
+  }
+};
+
+// -----------------------------------------------------------
+// Agenda completa de UM colaborador (visão do gestor): busca tudo o que
+// essa pessoa tem — o que o gestor atribuiu E o que ela mesma criou —
+// direto do servidor, sem mexer no localStorage da gestora.
+// -----------------------------------------------------------
+window.carregarAgendaDoMembro = async function carregarAgendaDoMembro(membroId) {
+  const [tarefasResp, rotinasResp] = await Promise.all([
+    supabaseClient.from('activities').select('*').eq('assigned_to', membroId).neq('type', 'rotina'),
+    supabaseClient.from('activities').select('*').eq('assigned_to', membroId).eq('type', 'rotina')
+  ]);
+
+  const activities = (!tarefasResp.error && tarefasResp.data) ? tarefasResp.data.map(linhaParaAtividade) : [];
+  const routines = (!rotinasResp.error && rotinasResp.data) ? rotinasResp.data.map(linhaParaRotina) : [];
+
+  let completions = {};
+  const idsRotinas = routines.map((r) => r.id);
+  if (idsRotinas.length > 0) {
+    const { data: ocorrencias, error: erroOcorrencias } = await supabaseClient
+      .from('activity_occurrences')
+      .select('activity_id, occurrence_date, completed, subtasks_state')
+      .in('activity_id', idsRotinas);
+    if (!erroOcorrencias && ocorrencias) {
+      ocorrencias.forEach((o) => {
+        completions[o.activity_id + '|' + o.occurrence_date] = { done: !!o.completed, subtasksDone: o.subtasks_state || {} };
+      });
+    }
+  }
+
+  return { activities, routines, completions };
+};
+
+function dataCurtaSimples(dataStr) {
+  const d = new Date(dataStr + 'T00:00:00');
+  return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// -----------------------------------------------------------
+// Painel do gestor: aprovar colaboradores pendentes
+// -----------------------------------------------------------
+window.renderizarAprovacoesPendentes = async function renderizarAprovacoesPendentes() {
+  const lista = document.getElementById('lista-aprovacoes');
+  const vazio = document.getElementById('aprovacoes-empty');
+  if (!lista) return;
+  lista.innerHTML = '<p class="hint-text">Carregando...</p>';
+
+  const { data: pendentes, error } = await supabaseClient
+    .from('profiles')
+    .select('id, name')
+    .eq('approved', false)
+    .eq('role', 'collaborator')
+    .order('created_at', { ascending: true });
+
+  if (error) {
+    lista.innerHTML = '<p class="hint-text">Não foi possível carregar agora. Tente de novo em instantes.</p>';
+    return;
+  }
+
+  if (!pendentes || pendentes.length === 0) {
+    lista.innerHTML = '';
+    vazio.classList.remove('hidden');
+    return;
+  }
+  vazio.classList.add('hidden');
+
+  lista.innerHTML = pendentes.map((p) => `
+    <div class="settings-row" data-id="${p.id}" style="align-items:center;">
+      <span>${p.name}</span>
+      <button class="btn btn-primary btn-aprovar" style="padding:8px 16px;font-size:14px;">Aprovar</button>
     </div>
-    <div class="modal-body">
-      <label class="field">
-        <span>Nova data</span>
-        <input type="date" id="date-picker-input">
-      </label>
-      <button id="btn-confirm-date" class="btn btn-primary btn-block">Confirmar</button>
-    </div>
-  </div>
-</div>
+  `).join('');
 
-<!-- ============================================================
-     MODAL: PENDÊNCIA (o que deseja fazer?)
-     ============================================================ -->
-<div id="modal-pending-resolve" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-sheet modal-sheet-small">
-    <div class="modal-header">
-      <h2>O que deseja fazer?</h2>
-      <button class="icon-btn" id="btn-close-pending-resolve" aria-label="Fechar">✕</button>
-    </div>
-    <div class="modal-body">
-      <p id="pending-resolve-text" class="hint-text"></p>
-      <div class="action-menu" id="pending-resolve-actions"></div>
-    </div>
-  </div>
-</div>
+  lista.querySelectorAll('.btn-aprovar').forEach((btn) => {
+    btn.addEventListener('click', async (ev) => {
+      const linha = ev.target.closest('[data-id]');
+      const id = linha.dataset.id;
+      btn.disabled = true;
+      btn.textContent = 'Aprovando...';
+      const { error: erroAprovar } = await supabaseClient
+        .from('profiles')
+        .update({ approved: true })
+        .eq('id', id);
+      if (erroAprovar) {
+        btn.disabled = false;
+        btn.textContent = 'Aprovar';
+        alert('Não foi possível aprovar agora. Tente novamente.');
+        return;
+      }
+      linha.remove();
+      if (!lista.querySelector('[data-id]')) {
+        vazio.classList.remove('hidden');
+      }
+    });
+  });
+};
 
-<!-- ============================================================
-     MODAL: CONFIRMAÇÃO GENÉRICA (excluir, apagar dados...)
-     ============================================================ -->
-<div id="modal-confirm" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-sheet modal-sheet-small">
-    <div class="modal-body">
-      <p id="confirm-text" class="hint-text"></p>
-      <div class="confirm-actions">
-        <button id="btn-confirm-cancel" class="btn btn-ghost btn-block">Cancelar</button>
-        <button id="btn-confirm-ok" class="btn btn-danger btn-block">Confirmar</button>
-      </div>
-    </div>
-  </div>
-</div>
+// -----------------------------------------------------------
+// Formulário de login
+// -----------------------------------------------------------
+document.getElementById('btn-login-submit').addEventListener('click', async () => {
+  esconderErro('auth-login-error');
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-password').value;
 
-<!-- ============================================================
-     MODAL: NOVA / EDITAR CATEGORIA
-     ============================================================ -->
-<div id="modal-category" class="modal-overlay hidden" role="dialog" aria-modal="true">
-  <div class="modal-sheet modal-sheet-small">
-    <div class="modal-header">
-      <h2 id="category-modal-title">Nova categoria</h2>
-      <button class="icon-btn" id="btn-close-category" aria-label="Fechar">✕</button>
-    </div>
-    <form id="form-category" class="modal-body">
-      <input type="hidden" id="cat-id">
-      <label class="field">
-        <span>Nome</span>
-        <input type="text" id="cat-name" required maxlength="30">
-      </label>
-      <label class="field">
-        <span>Cor</span>
-        <input type="color" id="cat-color" value="#1F5C54">
-      </label>
-      <button type="submit" class="btn btn-primary btn-block">Salvar categoria</button>
-    </form>
-  </div>
-</div>
+  if (!email || !senha) {
+    mostrarErro('auth-login-error', 'Preencha e-mail e senha.');
+    return;
+  }
 
-<!-- ============================================================
-     MODO FOCO (tela cheia)
-     ============================================================ -->
-<div id="focus-mode" class="focus-overlay hidden" role="dialog" aria-modal="true" aria-label="Modo Foco">
-  <button id="btn-exit-focus" class="icon-btn focus-exit" aria-label="Sair do Modo Foco">✕ Sair</button>
-  <div class="focus-content">
-    <p class="focus-eyebrow">Modo Foco</p>
-    <h2 id="focus-title">Nome da atividade</h2>
-    <ul id="focus-subtasks" class="focus-subtasks"></ul>
+  const { error } = await supabaseClient.auth.signInWithPassword({ email, password: senha });
+  if (error) {
+    mostrarErro('auth-login-error', 'E-mail ou senha incorretos.');
+    return;
+  }
 
-    <div id="focus-time-choices" class="focus-time-choices">
-      <button class="chip" data-minutes="5">Só 5 minutos</button>
-      <button class="chip" data-minutes="10">10 minutos</button>
-      <button class="chip" data-minutes="15">15 minutos</button>
-      <button class="chip" data-minutes="25">25 minutos</button>
-      <button class="chip" data-minutes="custom">Personalizado</button>
-    </div>
-    <div id="focus-custom-wrap" class="hidden" style="display:flex;gap:10px;align-items:center;">
-      <input type="number" id="focus-custom-minutes" min="0" max="180" placeholder="Minutos" style="flex:1;">
-      <span style="font-weight:700;color:var(--text-muted);">min</span>
-      <input type="number" id="focus-custom-seconds" min="0" max="59" placeholder="Segundos" style="flex:1;">
-      <span style="font-weight:700;color:var(--text-muted);">seg</span>
-    </div>
+  await verificarAprovacaoEProsseguir();
+});
 
-    <div id="focus-ring-wrap" class="focus-ring-wrap hidden">
-      <svg viewBox="0 0 220 220">
-        <circle class="focus-ring-track" cx="110" cy="110" r="98"></circle>
-        <circle id="focus-ring-progress" class="focus-ring-progress" cx="110" cy="110" r="98" stroke-dasharray="616" stroke-dashoffset="0"></circle>
-      </svg>
-      <div class="focus-ring-center">
-        <span id="focus-ring-label" class="focus-ring-label">Foco em</span>
-        <p id="focus-timer" class="focus-timer">25:00</p>
-      </div>
-    </div>
+// -----------------------------------------------------------
+// Alternar entre login e cadastro
+// -----------------------------------------------------------
+document.getElementById('btn-goto-signup').addEventListener('click', () => {
+  mostrarSomenteEsteScreen('screen-auth-signup');
+});
+document.getElementById('btn-back-login').addEventListener('click', () => {
+  mostrarSomenteEsteScreen('screen-auth-login');
+});
 
-    <div class="focus-controls">
-      <button id="focus-start" class="btn btn-primary">Iniciar</button>
-      <button id="focus-pause" class="btn btn-secondary hidden">Pausar</button>
-      <button id="focus-stop" class="btn btn-ghost hidden">Encerrar</button>
-      <button id="focus-complete" class="btn btn-primary">Concluir atividade</button>
-    </div>
+// -----------------------------------------------------------
+// Esqueci minha senha
+// -----------------------------------------------------------
+document.getElementById('btn-goto-forgot').addEventListener('click', () => {
+  esconderErro('auth-forgot-error');
+  document.getElementById('auth-forgot-success').classList.add('hidden');
+  mostrarSomenteEsteScreen('screen-auth-forgot');
+});
+document.getElementById('btn-back-forgot').addEventListener('click', () => {
+  mostrarSomenteEsteScreen('screen-auth-login');
+});
 
-    <p class="quote-box" style="margin-top:18px;background:rgba(255,255,255,0.08);color:var(--branco);"><span class="qb-icon">🌱</span><span>Tempo bem usado também é cuidado.</span></p>
-  </div>
-</div>
+document.getElementById('btn-forgot-submit').addEventListener('click', async () => {
+  esconderErro('auth-forgot-error');
+  document.getElementById('auth-forgot-success').classList.add('hidden');
+  const email = document.getElementById('forgot-email').value.trim();
 
-<!-- ============================================================
-     NOTIFICAÇÃO VISUAL INTERNA (toast de lembrete)
-     ============================================================ -->
-<div id="reminder-toast" class="reminder-toast hidden" role="alert">
-  <p id="reminder-toast-title" class="reminder-toast-title"></p>
-  <div class="reminder-toast-actions">
-    <button data-action="focus" id="reminder-toast-focus" class="btn btn-primary btn-small hidden">▶ Iniciar Foco</button>
-    <button data-action="complete" class="btn btn-primary btn-small">Concluir</button>
-    <button data-action="open" class="btn btn-secondary btn-small">Abrir</button>
-    <button data-action="snooze5" class="btn btn-ghost btn-small">+5min</button>
-    <button data-action="snooze10" class="btn btn-ghost btn-small">+10min</button>
-    <button data-action="snooze15" class="btn btn-ghost btn-small">+15min</button>
-    <button data-action="snooze30" class="btn btn-ghost btn-small">+30min</button>
-    <button data-action="dismiss" class="btn btn-ghost btn-small">Dispensar</button>
-  </div>
-</div>
+  if (!email) {
+    mostrarErro('auth-forgot-error', 'Digite o e-mail da sua conta.');
+    return;
+  }
 
-<!-- Mensagem de status para leitores de tela -->
-<div id="aria-live" class="sr-only" aria-live="polite"></div>
+  const urlAtual = window.location.origin + window.location.pathname;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: urlAtual
+  });
 
-<!-- Banner de instalação para iPhone (Safari não permite prompt automático nativo) -->
-<div id="ios-install-banner" class="ios-install-banner hidden">
-  <span class="ios-install-icon">📲</span>
-  <div class="ios-install-text">
-    <strong>Instale o Meu Dia no seu iPhone</strong>
-    <span>Toque em <strong>Compartilhar</strong> <span class="ios-share-icon">⬆️</span> e depois em <strong>"Adicionar à Tela de Início"</strong></span>
-  </div>
-  <button id="btn-close-ios-banner" class="icon-btn" aria-label="Fechar aviso de instalação">✕</button>
-</div>
+  if (error) {
+    mostrarErro('auth-forgot-error', 'Não foi possível enviar o link agora. Tente novamente em instantes.');
+    return;
+  }
 
-<script src="auth.js"></script>
-<script src="script.js"></script>
-</body>
-</html>
+  const sucesso = document.getElementById('auth-forgot-success');
+  sucesso.textContent = 'Pronto! Se esse e-mail tiver uma conta, o link pra criar uma senha nova já foi enviado. Confira sua caixa de entrada (e o spam).';
+  sucesso.classList.remove('hidden');
+});
+
+// -----------------------------------------------------------
+// Criar nova senha (depois de clicar no link recebido por e-mail)
+// -----------------------------------------------------------
+document.getElementById('btn-reset-submit').addEventListener('click', async () => {
+  esconderErro('auth-reset-error');
+  const novaSenha = document.getElementById('reset-password').value;
+
+  if (!novaSenha || novaSenha.length < 6) {
+    mostrarErro('auth-reset-error', 'A senha precisa ter pelo menos 6 caracteres.');
+    return;
+  }
+
+  const { error } = await supabaseClient.auth.updateUser({ password: novaSenha });
+
+  if (error) {
+    mostrarErro('auth-reset-error', 'Não foi possível salvar a nova senha. Tente clicar no link do e-mail novamente.');
+    return;
+  }
+
+  document.getElementById('reset-password').value = '';
+  await verificarAprovacaoEProsseguir();
+});
+
+// Quando a pessoa clica no link de "esqueci minha senha" recebido por e-mail,
+// o Supabase abre o app com uma sessão especial de recuperação. Detectamos
+// isso aqui e mandamos ela direto pra tela de "criar nova senha".
+supabaseClient.auth.onAuthStateChange((event) => {
+  if (event === 'PASSWORD_RECOVERY') {
+    mostrarSomenteEsteScreen('screen-auth-reset');
+  }
+});
+
+// -----------------------------------------------------------
+// Formulário de cadastro
+// -----------------------------------------------------------
+document.getElementById('btn-signup-submit').addEventListener('click', async () => {
+  esconderErro('auth-signup-error');
+  const nome = document.getElementById('signup-name').value.trim();
+  const codigo = document.getElementById('signup-company-code').value.trim();
+  const email = document.getElementById('signup-email').value.trim();
+  const senha = document.getElementById('signup-password').value;
+
+  if (!nome || !codigo || !email || !senha) {
+    mostrarErro('auth-signup-error', 'Preencha todos os campos.');
+    return;
+  }
+  if (senha.length < 6) {
+    mostrarErro('auth-signup-error', 'A senha precisa ter pelo menos 6 caracteres.');
+    return;
+  }
+
+  // 1. Verifica se o código da empresa existe e se ainda tem vaga disponível
+  const { data: vagaData, error: erroCodigo } = await supabaseClient
+    .rpc('verificar_vaga_empresa', { code: codigo });
+  const vaga = vagaData && vagaData[0];
+
+  if (erroCodigo || !vaga || !vaga.company_id) {
+    mostrarErro('auth-signup-error', 'Código da empresa inválido. Confira com seu gestor.');
+    return;
+  }
+  if (!vaga.tem_vaga) {
+    mostrarErro('auth-signup-error', 'Essa empresa já atingiu o limite de colaboradores no plano dela. Fale com seu gestor.');
+    return;
+  }
+  const companyId = vaga.company_id;
+
+  // Guarda os dados do cadastro antes de criar o login — usado caso a confirmação
+  // de e-mail interrompa o processo no meio (ver verificarAprovacaoEProsseguir).
+  localStorage.setItem('meudia_pending_profile', JSON.stringify({ name: nome, companyId }));
+
+  // 2. Cria o login
+  const { data: signUpData, error: erroCadastro } = await supabaseClient.auth.signUp({
+    email, password: senha
+  });
+
+  if (erroCadastro) {
+    mostrarErro('auth-signup-error', erroCadastro.message.includes('already registered')
+      ? 'Esse e-mail já tem uma conta. Tente entrar.'
+      : 'Não foi possível criar sua conta. Tente novamente.');
+    return;
+  }
+
+  // 3. Se o Supabase exigir confirmação de e-mail, ainda não existe sessão ativa.
+  //    Os dados já ficaram salvos em localStorage (acima) e serão usados assim
+  //    que a pessoa confirmar o e-mail e voltar a abrir o app.
+  if (!signUpData.session) {
+    mostrarErro('auth-signup-error', 'Verifique seu e-mail para confirmar o cadastro. Depois, é só voltar e abrir o app normalmente.');
+    mostrarSomenteEsteScreen('screen-auth-login');
+    return;
+  }
+
+  // 4. Cria o perfil (pendente de aprovação) ligado à empresa
+  const { error: erroPerfil } = await supabaseClient.from('profiles').insert({
+    id: signUpData.user.id,
+    company_id: companyId,
+    role: 'collaborator',
+    name: nome,
+    approved: false
+  });
+
+  if (erroPerfil) {
+    mostrarErro('auth-signup-error', 'Sua conta foi criada, mas houve um erro ao vincular à empresa. Fale com seu gestor.');
+    return;
+  }
+
+  localStorage.removeItem('meudia_pending_profile');
+  mostrarSomenteEsteScreen('screen-auth-pending');
+});
+
+// -----------------------------------------------------------
+// Tela de "aguardando aprovação"
+// -----------------------------------------------------------
+document.getElementById('btn-check-approval').addEventListener('click', verificarAprovacaoEProsseguir);
+document.getElementById('btn-logout-pending').addEventListener('click', async () => {
+  await supabaseClient.auth.signOut();
+  mostrarSomenteEsteScreen('screen-auth-login');
+});
+
+// -----------------------------------------------------------
+// Ao abrir o app: já tem sessão salva?
+// -----------------------------------------------------------
+document.addEventListener('DOMContentLoaded', verificarAprovacaoEProsseguir);
+
+// -----------------------------------------------------------
+// Botão "Sair" (dentro de Configurações)
+// -----------------------------------------------------------
+const botaoSair = document.getElementById('btn-logout');
+if (botaoSair) {
+  botaoSair.addEventListener('click', async () => {
+    if (!confirm('Tem certeza que deseja sair da sua conta?')) return;
+    await supabaseClient.auth.signOut();
+    location.reload();
+  });
+}
