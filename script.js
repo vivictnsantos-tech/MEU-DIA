@@ -1118,6 +1118,38 @@ function criarCartaoAtividade(item, onClickOverride) {
     sub.className = 'ac-subprogress';
     sub.textContent = `${done}/${item.subtasks.length} etapas concluídas`;
     body.appendChild(sub);
+
+    // Checklist das etapas, marcável direto aqui no cartão — sem isso não
+    // existia NENHUM jeito de marcar uma etapa como feita (o texto acima
+    // só mostrava a contagem, e nem o Modo Foco nem a edição permitiam
+    // marcar etapa por etapa).
+    const listaEtapas = document.createElement('ul');
+    listaEtapas.className = 'ac-subtasks-list';
+    item.subtasks.forEach((s) => {
+      const liEtapa = document.createElement('li');
+      liEtapa.className = 'ac-subtask-row' + (s.done ? ' done' : '');
+
+      const chk = document.createElement('button');
+      chk.type = 'button';
+      chk.className = 'ac-subtask-check' + (s.done ? ' checked' : '');
+      chk.setAttribute('aria-label', s.done ? 'Desmarcar etapa' : 'Marcar etapa como concluída');
+      chk.innerHTML = s.done
+        ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 12.5l4.5 4.5 10.5-11"/></svg>'
+        : '';
+      chk.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        marcarSubtarefa(item, s.id, !s.done);
+        renderizarTelaAtual(telaAtivaId());
+      });
+
+      const txt = document.createElement('span');
+      txt.textContent = s.text;
+
+      liEtapa.appendChild(chk);
+      liEtapa.appendChild(txt);
+      listaEtapas.appendChild(liEtapa);
+    });
+    body.appendChild(listaEtapas);
   }
 
   const more = document.createElement('button');
