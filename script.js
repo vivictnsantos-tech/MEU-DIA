@@ -188,6 +188,20 @@ function carregarEstado() {
   state.history = carregar(CHAVES.history, {});
 }
 
+// Limpeza automática de rotinas "vazadas" para dentro da lista de tarefas
+// avulsas (state.activities) — um bug antigo na sincronização baixava a
+// rotina duas vezes (uma certinha em state.routines, outra por engano aqui),
+// fazendo ela aparecer duplicada na tela "Hoje" e ser empurrada pra frente
+// todo dia pelo rolamento automático. Isso já foi corrigido na origem
+// (auth.js não baixa mais rotina como tarefa avulsa), mas quem já tinha essa
+// cópia salva no aparelho continuaria vendo a duplicata até isso rodar uma
+// vez e remover o que sobrou.
+function limparRotinasVazadasDeAtividades() {
+  const antes = state.activities.length;
+  state.activities = state.activities.filter((a) => a.type !== 'rotina');
+  if (state.activities.length !== antes) salvarAtividades();
+}
+
 // Tarefas avulsas (não-rotina) que ficaram sem concluir num dia passado são
 // jogadas automaticamente pra hoje — assim elas continuam aparecendo até a
 // pessoa realmente concluir, em vez de ficar "esquecida" numa data antiga.
@@ -202,6 +216,25 @@ function adiantarPendentesParaHoje() {
     }
   });
   if (mudou) salvarAtividades();
+}
+
+// O interruptor de notificações guarda um "sim/não" salvo no aparelho, mas
+// quem realmente decide se a notificação funciona é a permissão do
+// navegador. Se essas duas coisas saírem de sincronia (o navegador ainda
+// tem a permissão concedida, mas o valor salvo aqui virou "não" por algum
+// motivo), o navegador é quem manda — assim o interruptor não volta
+// sozinho pra desligado depois de já ter sido ativado uma vez.
+function reconciliarNotificacoesComNavegador() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted' && !state.settings.notifications) {
+    state.settings.notifications = true;
+    salvarSettings();
+  } else if (Notification.permission !== 'granted' && state.settings.notifications) {
+    // A permissão foi revogada nas configurações do aparelho — reflete isso
+    // aqui também, pra não mostrar "ativado" sem funcionar de verdade.
+    state.settings.notifications = false;
+    salvarSettings();
+  }
 }
 
 function salvarAtividades() {
@@ -2864,7 +2897,9 @@ function inicializar() {
   if (primeiraVez) inicializarDadosVazios();
 
   carregarEstado();
+  limparRotinasVazadasDeAtividades();
   adiantarPendentesParaHoje();
+  reconciliarNotificacoesComNavegador();
   aplicarTema();
 
   configurarNavegacao();
