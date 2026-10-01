@@ -786,9 +786,12 @@ document.getElementById('btn-signup-submit').addEventListener('click', async () 
   });
 
   if (erroCadastro) {
+    // DIAGNÓSTICO TEMPORÁRIO (30/09): mostrando a mensagem técnica real do
+    // Supabase entre parênteses, só pra identificar por que alguns cadastros
+    // estão falhando com a mensagem genérica. Remover depois de descobrir.
     mostrarErro('auth-signup-error', erroCadastro.message.includes('already registered')
       ? 'Esse e-mail já tem uma conta. Tente entrar.'
-      : 'Não foi possível criar sua conta. Tente novamente.');
+      : `Não foi possível criar sua conta. Tente novamente. (${erroCadastro.message})`);
     return;
   }
 
