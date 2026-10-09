@@ -61,6 +61,8 @@
 :root[data-theme="dark"] .routine-icon,
 :root[data-theme="dark"] .settings-section-title,
 :root[data-theme="dark"] .settings-row.linklike,
+:root[data-theme="dark"] .cd-item,
+:root[data-theme="dark"] .mini-cal-day.em-vista,
 :root[data-theme="dark"] .month-header {
   color: #8FD9C7;
 }
@@ -68,6 +70,15 @@
 :root[data-theme="dark"] .next-appointment .na-title,
 :root[data-theme="dark"] .cal-label {
   color: #D7E4EA;
+}
+/* Mesma ideia, mas pros textos em cima de fundo "coral claro" (prioridade
+   alta) — em vez do vermelho escuro, usa um tom coral claro que aparece
+   bem no fundo escuro. */
+:root[data-theme="dark"] .cd-item.prio-alta,
+:root[data-theme="dark"] .btn-danger,
+:root[data-theme="dark"] .overdue-banner strong,
+:root[data-theme="dark"] .member-item-delete:hover {
+  color: #F3B39C;
 }
 
 * { box-sizing: border-box; }
