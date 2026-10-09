@@ -1268,6 +1268,7 @@ function renderizarCalendario() {
   const filtroCategoria = document.getElementById('filter-category').value;
   const filtroPrioridade = document.getElementById('filter-priority').value;
   const filtroStatus = document.getElementById('filter-status').value;
+  const busca = (document.getElementById('calendar-search').value || '').toLowerCase();
 
   document.querySelectorAll('#calendar-mode .segmented-btn').forEach((b) => {
     b.classList.toggle('active', b.dataset.mode === state.calendarMode);
@@ -1309,6 +1310,29 @@ function renderizarCalendario() {
   }
 
   const hoje = hojeStr();
+  const filtros = { filtroCategoria, filtroPrioridade, filtroStatus, busca };
+  const corteModo = document.getElementById('calendar-week-hourly');
+  const tituloDia = document.getElementById('calendar-day-title');
+  const ulDia = document.getElementById('calendar-day-list');
+  const cardDia = document.getElementById('calendar-day-card');
+
+  if (state.calendarMode === 'week') {
+    // Modo Semana: grade por horário (tipo Google Calendar) — mostra o
+    // título de cada atividade posicionado no horário certo, em vez de só
+    // uma lista separada. Por isso escondemos o grid de bolinhas e o card
+    // "dia selecionado" do lado, que ficariam redundantes aqui.
+    grid.classList.add('hidden');
+    corteModo.classList.remove('hidden');
+    cardDia.classList.add('hidden');
+    renderizarSemanaHoraria(diasParaMostrar, filtros, hoje);
+    renderizarCalMiniCalendario();
+    return;
+  }
+
+  grid.classList.remove('hidden');
+  corteModo.classList.add('hidden');
+  cardDia.classList.remove('hidden');
+
   diasParaMostrar.forEach(({ date, outroMes }) => {
     const dataStr = formatarDataISO(date);
     let itens = ocorrenciasDoDia(dataStr);
@@ -1316,6 +1340,7 @@ function renderizarCalendario() {
     if (filtroPrioridade) itens = itens.filter((i) => i.priority === filtroPrioridade);
     if (filtroStatus === 'pendente') itens = itens.filter((i) => !i.completed);
     if (filtroStatus === 'concluida') itens = itens.filter((i) => i.completed);
+    if (busca) itens = itens.filter((i) => i.title.toLowerCase().includes(busca));
 
     const btn = document.createElement('button');
     btn.className = 'cal-day';
@@ -1323,21 +1348,35 @@ function renderizarCalendario() {
     if (dataStr === hoje) btn.classList.add('today');
     if (dataStr === state.selectedCalendarDay) btn.classList.add('selected');
     btn.setAttribute('aria-label', dataExtensa(dataStr));
-    btn.innerHTML = `<span>${date.getDate()}</span>`;
-    if (itens.length) {
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      btn.appendChild(dot);
+
+    // Em vez de só uma bolinha indicando "tem algo nesse dia", mostra o
+    // título das atividades (até 2) direto na célula do mês — igual ao
+    // Google Calendar. O resto aparece como "+N mais".
+    const MAX_ITENS_NA_CELULA = 2;
+    let html = `<span class="cd-num">${date.getDate()}</span>`;
+    itens.slice(0, MAX_ITENS_NA_CELULA).forEach((it) => {
+      const classes = ['cd-item'];
+      if (it.priority === 'alta') classes.push('prio-alta');
+      if (it.completed) classes.push('completed');
+      html += `<span class="${classes.join(' ')}">${escapeHtml(it.title)}</span>`;
+    });
+    if (itens.length > MAX_ITENS_NA_CELULA) {
+      html += `<span class="cd-more">+${itens.length - MAX_ITENS_NA_CELULA} mais</span>`;
     }
+    btn.innerHTML = html;
+
     btn.addEventListener('click', () => {
       state.selectedCalendarDay = dataStr;
+      // No celular o calendário pequeno + lista do dia ficam escondidos até
+      // tocar no 📅 — mas clicar num dia já é pedir pra ver a lista dele,
+      // então abre ali do lado na hora, sem precisar desse passo extra.
+      document.getElementById('calendar-side').classList.add('cal-mini-open');
       renderizarCalendario();
     });
     grid.appendChild(btn);
   });
 
   // Lista do dia selecionado
-  const tituloDia = document.getElementById('calendar-day-title');
   tituloDia.textContent = state.selectedCalendarDay === hoje
     ? 'Hoje'
     : dataExtensa(state.selectedCalendarDay);
@@ -1347,9 +1386,256 @@ function renderizarCalendario() {
   if (filtroPrioridade) itensDia = itensDia.filter((i) => i.priority === filtroPrioridade);
   if (filtroStatus === 'pendente') itensDia = itensDia.filter((i) => !i.completed);
   if (filtroStatus === 'concluida') itensDia = itensDia.filter((i) => i.completed);
+  if (busca) itensDia = itensDia.filter((i) => i.title.toLowerCase().includes(busca));
 
-  const ulDia = document.getElementById('calendar-day-list');
   renderizarListaComSeparador(ulDia, itensDia);
+  renderizarCalMiniCalendario();
+}
+
+// ----------------------------------------------------------------
+// Grade por horário do modo Semana — cada atividade com horário vira um
+// bloco posicionado na altura certa (tipo Google Calendar); o que não tem
+// horário fica numa fileira "sem horário" no topo. Troquei a bolinha única
+// por isso porque a bolinha não mostrava NADA do que era a atividade.
+// ----------------------------------------------------------------
+const WH_ALTURA_HORA = 48; // pixels por hora na grade
+const WH_HORAS = Array.from({ length: 24 }, (_, h) => h);
+
+function whAbrirItem(item) {
+  abrirModalAtividade(item, item.isRoutine ? objetoOriginal(item) : null);
+}
+
+// Quando dois ou mais itens do mesmo dia têm horário que se cruza, em vez de
+// desenhar um bloco em cima do outro (ilegível), divide a largura da coluna
+// entre eles, lado a lado — igual ao Google Calendar faz. Recebe uma lista
+// de { inicioMin, fimMin } (já ordenada por horário de início não é exigido)
+// e devolve, na mesma ordem de entrada, { col, totalCols } de cada item.
+function calcularColunasSobrepostas(comHorarioCalc) {
+  const ordem = comHorarioCalc
+    .map((c, idx) => ({ ...c, idx }))
+    .sort((a, b) => a.inicioMin - b.inicioMin || a.fimMin - b.fimMin);
+
+  const colunas = []; // fimMin do último item colocado em cada coluna
+  const resultado = new Array(comHorarioCalc.length);
+  const grupoAtual = [];
+
+  function fecharGrupo() {
+    if (!grupoAtual.length) return;
+    const totalCols = colunas.length;
+    grupoAtual.forEach((g) => { resultado[g.idx].totalCols = totalCols; });
+    grupoAtual.length = 0;
+    colunas.length = 0;
+  }
+
+  ordem.forEach((item) => {
+    // Se esse item começa depois de todas as colunas abertas já terem
+    // acabado, o grupo de sobreposição anterior fechou — começa um novo.
+    const aindaSobrepoe = colunas.some((fim) => fim > item.inicioMin);
+    if (!aindaSobrepoe && colunas.length) fecharGrupo();
+
+    let colIdx = colunas.findIndex((fim) => fim <= item.inicioMin);
+    if (colIdx === -1) { colIdx = colunas.length; colunas.push(item.fimMin); }
+    else colunas[colIdx] = item.fimMin;
+
+    resultado[item.idx] = { col: colIdx, totalCols: 1 };
+    grupoAtual.push(item);
+  });
+  fecharGrupo();
+
+  return resultado;
+}
+
+function renderizarSemanaHoraria(diasParaMostrar, filtros, hoje) {
+  const { filtroCategoria, filtroPrioridade, filtroStatus, busca } = filtros;
+  const headerRow = document.getElementById('wh-header-row');
+  const alldayRow = document.getElementById('wh-allday-row');
+  const bodyRow = document.getElementById('wh-body-row');
+
+  headerRow.innerHTML = '';
+  alldayRow.innerHTML = '';
+  bodyRow.innerHTML = '';
+
+  const gutterHeader = document.createElement('div');
+  gutterHeader.className = 'wh-gutter-cell';
+  headerRow.appendChild(gutterHeader);
+
+  const gutterAllday = document.createElement('div');
+  gutterAllday.className = 'wh-gutter-cell';
+  alldayRow.appendChild(gutterAllday);
+
+  const gutterBody = document.createElement('div');
+  gutterBody.className = 'wh-gutter';
+  gutterBody.style.height = (WH_ALTURA_HORA * 24) + 'px';
+  WH_HORAS.forEach((h) => {
+    const lbl = document.createElement('span');
+    lbl.className = 'wh-hour-label';
+    lbl.style.top = (h * WH_ALTURA_HORA) + 'px';
+    lbl.textContent = h === 0 ? '' : `${String(h).padStart(2, '0')}:00`;
+    gutterBody.appendChild(lbl);
+  });
+  bodyRow.appendChild(gutterBody);
+
+  diasParaMostrar.forEach(({ date }) => {
+    const dataStr = formatarDataISO(date);
+    let itens = ocorrenciasDoDia(dataStr);
+    if (filtroCategoria) itens = itens.filter((i) => i.category === filtroCategoria);
+    if (filtroPrioridade) itens = itens.filter((i) => i.priority === filtroPrioridade);
+    if (filtroStatus === 'pendente') itens = itens.filter((i) => !i.completed);
+    if (filtroStatus === 'concluida') itens = itens.filter((i) => i.completed);
+    if (busca) itens = itens.filter((i) => i.title.toLowerCase().includes(busca));
+
+    const ehHoje = dataStr === hoje;
+
+    // Cabeçalho do dia
+    const head = document.createElement('button');
+    head.type = 'button';
+    head.className = 'wh-day-header' + (ehHoje ? ' today' : '');
+    head.innerHTML = `<span class="wh-dow">${DIAS_SEMANA_ABREV[date.getDay()]}</span><span class="wh-num">${date.getDate()}</span>`;
+    head.addEventListener('click', () => { state.selectedCalendarDay = dataStr; });
+    headerRow.appendChild(head);
+
+    // Itens sem horário definido — fileira "sem horário" no topo
+    const semHorario = itens.filter((i) => !i.time);
+    const comHorario = itens.filter((i) => i.time);
+
+    const cellAllday = document.createElement('div');
+    cellAllday.className = 'wh-allday-cell';
+    semHorario.forEach((item) => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'wh-allday-chip' + (item.completed ? ' completed' : '');
+      chip.textContent = (item.priority === 'alta' ? '🔥 ' : '') + item.title;
+      chip.addEventListener('click', () => whAbrirItem(item));
+      cellAllday.appendChild(chip);
+    });
+    alldayRow.appendChild(cellAllday);
+
+    // Coluna com as linhas de hora e os blocos posicionados por horário
+    const col = document.createElement('div');
+    col.className = 'wh-day-col' + (ehHoje ? ' today' : '');
+    col.style.height = (WH_ALTURA_HORA * 24) + 'px';
+    WH_HORAS.forEach((h) => {
+      const linha = document.createElement('div');
+      linha.className = 'wh-hour-line';
+      linha.style.top = (h * WH_ALTURA_HORA) + 'px';
+      col.appendChild(linha);
+    });
+
+    // Calcula horário de início/fim (em minutos) de cada item com horário,
+    // pra poder detectar sobreposição entre eles.
+    const comHorarioCalc = comHorario.map((item) => {
+      const [hh, mm] = item.time.split(':').map(Number);
+      const inicioMin = hh * 60 + (mm || 0);
+      let duracaoMin = duracaoEmMinutos(item.time, item.endTime);
+      if (!duracaoMin || duracaoMin <= 0) duracaoMin = 45; // duração padrão pra ficar visível
+      return { item, inicioMin, fimMin: inicioMin + duracaoMin };
+    });
+    const layout = calcularColunasSobrepostas(comHorarioCalc);
+
+    comHorarioCalc.forEach(({ item, inicioMin, fimMin }, idx) => {
+      const top = (inicioMin / 60) * WH_ALTURA_HORA;
+      const altura = Math.max(((fimMin - inicioMin) / 60) * WH_ALTURA_HORA, 20);
+      const { col: colIdx, totalCols } = layout[idx];
+      const larguraPct = 100 / totalCols;
+
+      const bloco = document.createElement('button');
+      bloco.type = 'button';
+      bloco.className = 'wh-event' + (item.priority === 'alta' ? ' prio-alta' : '') + (item.completed ? ' completed' : '');
+      bloco.style.top = top + 'px';
+      bloco.style.height = altura + 'px';
+      bloco.style.left = `calc(${colIdx * larguraPct}% + 2px)`;
+      bloco.style.right = 'auto';
+      bloco.style.width = `calc(${larguraPct}% - 4px)`;
+      bloco.innerHTML = `<span class="wh-event-time">${item.time}</span><span class="wh-event-title">${escapeHtml(item.title)}</span>`;
+      bloco.addEventListener('click', () => whAbrirItem(item));
+      col.appendChild(bloco);
+    });
+
+    bodyRow.appendChild(col);
+  });
+
+  // Rola a grade pra mostrar a partir das 7h, em vez de começar à meia-noite
+  const scrollBox = document.getElementById('wh-body-scroll');
+  scrollBox.scrollTop = 7 * WH_ALTURA_HORA;
+}
+
+// ----------------------------------------------------------------
+// Calendário pequeno do lado (tela Calendário) — igual ao da tela Hoje,
+// mas clicável: clicar num dia faz a tela principal pular direto pra lá
+// (no mês ou na semana certa), pra navegar rápido sem ficar clicando
+// nas setinhas uma por uma. O mês mostrado aqui pode ser navegado de
+// forma independente da tela principal (pra "procurar" um dia à frente),
+// e volta a seguir a tela principal sempre que ela muda de período.
+// ----------------------------------------------------------------
+let calMiniMesExibido = null; // Date (dia 1 do mês mostrado no mini-calendário)
+
+function sincronizarCalMiniComVisao() {
+  const base = state.calendarViewDate;
+  calMiniMesExibido = new Date(base.getFullYear(), base.getMonth(), 1);
+}
+
+// No modo Semana, devolve o conjunto de datas (YYYY-MM-DD) que a tela
+// principal está mostrando agora, pra destacar essa faixa no mini-calendário.
+function diasEmVistaNoCalendarioPrincipal() {
+  if (state.calendarMode !== 'week') return new Set();
+  const base = state.calendarViewDate;
+  const inicioSemana = new Date(base);
+  inicioSemana.setDate(base.getDate() - base.getDay());
+  const set = new Set();
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(inicioSemana);
+    d.setDate(inicioSemana.getDate() + i);
+    set.add(formatarDataISO(d));
+  }
+  return set;
+}
+
+function renderizarCalMiniCalendario() {
+  const grid = document.getElementById('cal-mini-grid');
+  const label = document.getElementById('cal-mini-label');
+  if (!grid || !label) return;
+  if (!calMiniMesExibido) sincronizarCalMiniComVisao();
+
+  const ano = calMiniMesExibido.getFullYear();
+  const mes = calMiniMesExibido.getMonth(); // 0-based
+  label.textContent = `${MESES[mes]} ${ano}`;
+
+  const primeiroDia = new Date(ano, mes, 1);
+  const diaSemanaInicio = primeiroDia.getDay();
+  const diasNoMes = new Date(ano, mes + 1, 0).getDate();
+  const diasNoMesAnterior = new Date(ano, mes, 0).getDate();
+  const hoje = hojeStr();
+  const emVista = diasEmVistaNoCalendarioPrincipal();
+
+  let html = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'].map((d) => `<div class="mini-cal-dow">${d}</div>`).join('');
+
+  for (let i = diaSemanaInicio - 1; i >= 0; i--) {
+    html += `<button type="button" class="mini-cal-day outro-mes" disabled>${diasNoMesAnterior - i}</button>`;
+  }
+  for (let d = 1; d <= diasNoMes; d++) {
+    const dataStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const classes = ['mini-cal-day'];
+    if (dataStr === hoje) classes.push('hoje');
+    if (dataStr === state.selectedCalendarDay) classes.push('selecionado');
+    if (emVista.has(dataStr)) classes.push('em-vista');
+    html += `<button type="button" class="${classes.join(' ')}" data-data="${dataStr}">${d}</button>`;
+  }
+  const totalCelulas = diaSemanaInicio + diasNoMes;
+  const sobra = (7 - (totalCelulas % 7)) % 7;
+  for (let d = 1; d <= sobra; d++) {
+    html += `<button type="button" class="mini-cal-day outro-mes" disabled>${d}</button>`;
+  }
+
+  grid.innerHTML = html;
+  grid.querySelectorAll('.mini-cal-day[data-data]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const [a, m, dd] = btn.dataset.data.split('-').map(Number);
+      state.calendarViewDate = new Date(a, m - 1, dd);
+      state.selectedCalendarDay = btn.dataset.data;
+      sincronizarCalMiniComVisao();
+      renderizarCalendario();
+    });
+  });
 }
 
 function preencherFiltroCategoriasCalendario() {
@@ -1375,14 +1661,36 @@ function configurarCalendario() {
     const d = state.calendarViewDate;
     if (state.calendarMode === 'month') d.setMonth(d.getMonth() - 1);
     else d.setDate(d.getDate() - 7);
+    sincronizarCalMiniComVisao();
     renderizarCalendario();
   });
   document.getElementById('cal-next').addEventListener('click', () => {
     const d = state.calendarViewDate;
     if (state.calendarMode === 'month') d.setMonth(d.getMonth() + 1);
     else d.setDate(d.getDate() + 7);
+    sincronizarCalMiniComVisao();
     renderizarCalendario();
   });
+  document.getElementById('cal-today').addEventListener('click', () => {
+    state.calendarViewDate = new Date();
+    state.selectedCalendarDay = hojeStr();
+    sincronizarCalMiniComVisao();
+    renderizarCalendario();
+  });
+  document.getElementById('cal-mini-prev').addEventListener('click', () => {
+    if (!calMiniMesExibido) sincronizarCalMiniComVisao();
+    calMiniMesExibido.setMonth(calMiniMesExibido.getMonth() - 1);
+    renderizarCalMiniCalendario();
+  });
+  document.getElementById('cal-mini-next').addEventListener('click', () => {
+    if (!calMiniMesExibido) sincronizarCalMiniComVisao();
+    calMiniMesExibido.setMonth(calMiniMesExibido.getMonth() + 1);
+    renderizarCalMiniCalendario();
+  });
+  document.getElementById('btn-toggle-cal-mini').addEventListener('click', () => {
+    document.getElementById('calendar-side').classList.toggle('cal-mini-open');
+  });
+  document.getElementById('calendar-search').addEventListener('input', renderizarCalendario);
   ['filter-category', 'filter-priority', 'filter-status'].forEach((id) => {
     document.getElementById(id).addEventListener('change', renderizarCalendario);
   });
