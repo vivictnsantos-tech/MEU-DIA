@@ -257,40 +257,83 @@
 
   <!-- ================= TELA: CALENDÁRIO ================= -->
   <section id="screen-calendar" class="screen view" aria-label="Calendário">
-    <div class="calendar-toolbar">
-      <div class="segmented" id="calendar-mode">
-        <button class="segmented-btn active" data-mode="month">Mês</button>
-        <button class="segmented-btn" data-mode="week">Semana</button>
+    <div class="calendar-layout">
+      <div class="calendar-main">
+        <div class="calendar-toolbar">
+          <div class="calendar-nav">
+            <button id="cal-today" class="btn btn-ghost btn-small" type="button">Hoje</button>
+            <button id="cal-prev" class="icon-btn" aria-label="Período anterior">‹</button>
+            <span id="cal-label" class="cal-label"></span>
+            <button id="cal-next" class="icon-btn" aria-label="Próximo período">›</button>
+            <button id="btn-toggle-cal-mini" class="icon-btn" type="button" aria-label="Mostrar calendário pequeno">📅</button>
+          </div>
+          <div class="segmented" id="calendar-mode">
+            <button class="segmented-btn active" data-mode="month">Mês</button>
+            <button class="segmented-btn" data-mode="week">Semana</button>
+          </div>
+        </div>
+
+        <div class="list-toolbar">
+          <input type="search" id="calendar-search" class="search-input" placeholder="Buscar atividade no calendário..." aria-label="Buscar no calendário">
+        </div>
+
+        <div class="filters-row" id="calendar-filters">
+          <select id="filter-category" aria-label="Filtrar por categoria">
+            <option value="">Categoria: todas</option>
+          </select>
+          <select id="filter-priority" aria-label="Filtrar por prioridade">
+            <option value="">Prioridade: todas</option>
+            <option value="alta">Alta</option>
+            <option value="media">Média</option>
+            <option value="baixa">Baixa</option>
+          </select>
+          <select id="filter-status" aria-label="Filtrar por situação">
+            <option value="">Situação: todas</option>
+            <option value="pendente">Pendentes</option>
+            <option value="concluida">Concluídas</option>
+          </select>
+        </div>
+
+        <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Grade do calendário"></div>
+
+        <!-- Grade por horário (modo Semana) — mostra os blocos de cada atividade
+             posicionados pelo horário, tipo agenda do Google Calendar, em vez de
+             só uma bolinha indicando que tem algo naquele dia. -->
+        <div id="calendar-week-hourly" class="week-hourly hidden">
+          <div class="wh-scrollx">
+            <div class="wh-inner">
+              <div class="wh-header-row" id="wh-header-row"></div>
+              <div class="wh-allday-row" id="wh-allday-row"></div>
+              <div class="wh-body-scroll" id="wh-body-scroll">
+                <div class="wh-body-row" id="wh-body-row"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="quote-box"><span class="qb-icon">🗓️</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
       </div>
-      <div class="calendar-nav">
-        <button id="cal-prev" class="icon-btn" aria-label="Período anterior">‹</button>
-        <span id="cal-label" class="cal-label"></span>
-        <button id="cal-next" class="icon-btn" aria-label="Próximo período">›</button>
-      </div>
+
+      <!-- Calendário pequeno do lado: clica num dia e a tela principal pula
+           direto pra lá (mês ou semana) — serve pra navegar rápido entre
+           meses/semanas sem precisar ficar clicando nas setinhas uma por uma.
+           Embaixo dele fica a lista completa do dia clicado, sem precisar
+           sair da página. -->
+      <aside class="calendar-side" id="calendar-side">
+        <div class="side-card">
+          <div class="side-card-head">
+            <button id="cal-mini-prev" class="icon-btn icon-btn-small" type="button" aria-label="Mês anterior">‹</button>
+            <strong id="cal-mini-label"></strong>
+            <button id="cal-mini-next" class="icon-btn icon-btn-small" type="button" aria-label="Próximo mês">›</button>
+          </div>
+          <div id="cal-mini-grid" class="mini-cal-grid mini-cal-grid-clickable"></div>
+        </div>
+        <div class="side-card" id="calendar-day-card">
+          <h2 class="section-title cal-day-side-title" id="calendar-day-title">Selecione um dia</h2>
+          <ul id="calendar-day-list" class="activity-list"></ul>
+        </div>
+      </aside>
     </div>
-
-    <div class="filters-row" id="calendar-filters">
-      <select id="filter-category" aria-label="Filtrar por categoria">
-        <option value="">Categoria: todas</option>
-      </select>
-      <select id="filter-priority" aria-label="Filtrar por prioridade">
-        <option value="">Prioridade: todas</option>
-        <option value="alta">Alta</option>
-        <option value="media">Média</option>
-        <option value="baixa">Baixa</option>
-      </select>
-      <select id="filter-status" aria-label="Filtrar por situação">
-        <option value="">Situação: todas</option>
-        <option value="pendente">Pendentes</option>
-        <option value="concluida">Concluídas</option>
-      </select>
-    </div>
-
-    <div id="calendar-grid" class="calendar-grid" role="grid" aria-label="Grade do calendário"></div>
-
-    <h2 class="section-title" id="calendar-day-title">Selecione um dia</h2>
-    <ul id="calendar-day-list" class="activity-list"></ul>
-    <p class="quote-box"><span class="qb-icon">🗓️</span><span>Organização hoje, mais tranquilidade amanhã.</span></p>
   </section>
 
   <!-- ================= TELA: PENDENTES ================= -->
